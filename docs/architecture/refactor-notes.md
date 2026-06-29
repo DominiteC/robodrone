@@ -576,3 +576,23 @@
 - 烧录后确认启动日志正常，遥控数据持续更新。
 - 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。
 - 重点确认电调、电机、舵机、电杆初始状态无异常。
+
+## 第三十六阶段：拆分控制 PID 配置模块
+
+本阶段继续瘦身 `control.c`，把 PID 参数和 PID 实例集中到独立模块。
+
+- 新增 `user/control/control_pid.c/.h`。
+- `control_pid.c` 承接所有 PID 初始化配置、PID 实例定义和 `Control_Init()`。
+- `control_pid.h` 继续暴露已有 PID 实例，保持 `ANO_DT`、控制调试和外部查看代码的访问方式不变。
+- `control.h` include `control_pid.h`，对外兼容原来的 `control.h` 使用方式。
+- `control.c` 继续保留 `ResetFlightControlPIDs()`、控制算法和控制任务主循环。
+- Keil 工程 control 分组加入 `control_pid.c/.h`。
+- 本阶段不修改 PID 参数数值、PID 初始化顺序、控制算法、任务周期和硬件动作。
+- 提交描述：`重构：拆分控制 PID 配置模块`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动日志正常，遥控数据持续更新。
+- 确认 `ANO_DT` PID 回传/调参相关功能未出现链接错误或异常。
+- 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。

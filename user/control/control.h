@@ -1,7 +1,7 @@
 #ifndef __CONTROL_H__
 #define __CONTROL_H__
 
-#include "PIDcontroller.h"
+#include "control_pid.h"
 #include "drone_types.h"
 
 #define RATE_5_HZ		5
@@ -37,21 +37,6 @@
 #define POSITION_PID_RATE		POSITION_ESTIMAT_RATE
 #define POSITION_PID_DT			(1.0 / POSITION_ESTIMAT_RATE)
 
-extern PIDInstance pid_height_position;
-extern PIDInstance pid_x_position;
-extern PIDInstance pid_y_position;
-
-extern PIDInstance pid_x_velocity;
-extern PIDInstance pid_y_velocity;
-extern PIDInstance pid_z_velocity;
-
-extern PIDInstance pid_roll_angle;
-extern PIDInstance pid_pitch_angle;
-extern PIDInstance pid_yaw_angle;
-
-extern PIDInstance pid_roll_rate;
-extern PIDInstance pid_pitch_rate;
-extern PIDInstance pid_yaw_rate;
 
 extern float debug_xy_velocity_pid_count;
 extern float debug_target_angle_pitch;
@@ -60,7 +45,6 @@ extern float debug_target_angle_yaw;
 extern state_t state;
 extern MotorCtrl debugEsc;
 
-void Control_Init(void);
 void ResetFlightControlPIDs(void);
 float getAltholdThrust(void);
 float getThrustCmd(void);

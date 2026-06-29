@@ -54,7 +54,8 @@ main.c
 
 | 文件 | 作用 |
 | --- | --- |
-| `control.c/.h` | 控制任务入口、模式判断、PID 初始化、姿态/高度/位置控制、输出混控和安全保护。后续继续按职责拆分。 |
+| `control.c/.h` | 控制任务入口、模式判断、姿态/高度/位置控制、输出混控和安全保护。后续继续按职责拆分。 |
+| `control_pid.c/.h` | PID 参数、PID 实例和控制初始化入口。负责集中维护 PID 配置。 |
 | `control_state.c/.h` | 控制状态刷新和状态打印。负责从陀螺仪、光流/定位模块读取 `state_t` 所需数据。 |
 | `control_output.c/.h` | 控制输出落地。负责把 `MotorCtrl` 写入电调和电机驱动。 |
 | `control_safety.c/.h` | 运行时安全检查。负责异常状态锁定、姿态超限保护和安全输出切断。 |
@@ -156,3 +157,10 @@ main.c
 - 新增 `control_safety.c/.h`，承接 `safeCheck()`，隔离运行时安全保护逻辑。
 - `control.c` 继续负责任务主循环和控制算法调用，但不再直接 include `esc.h`、`motor.h`、`alarm.h`。
 - 本阶段不改变安全阈值、输出数值、控制算法、任务周期和硬件动作。
+
+### 2026-06-29：拆分控制 PID 配置模块
+
+- 新增 `control_pid.c/.h`，承接 PID 参数、PID 实例和 `Control_Init()`。
+- `control.h` 通过 `control_pid.h` 暴露已有 PID 实例，兼容 `ANO_DT` 等调参/回传代码。
+- `control.c` 不再直接承载大段 PID 参数配置，但继续执行控制算法、PID 计算和复位逻辑。
+- 本阶段不改变任何 PID 参数数值、初始化顺序、控制算法和任务行为。
