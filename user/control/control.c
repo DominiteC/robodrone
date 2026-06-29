@@ -604,10 +604,10 @@ void Walk_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 {
     if (state->isRCLocked == false)
     {
-        ctrl->Motor_Left_Front_PWM = (50-target->thrust)*75 + target->angle.yaw *45;
-        ctrl->Motor_Left_Back_PWM = (50-target->thrust)*75 + target->angle.yaw*45;
-        ctrl->Motor_Right_Front_PWM = (50-target->thrust)*75 - target->angle.yaw*45;
-        ctrl->Motor_Right_Back_PWM = (50-target->thrust)*75 - target->angle.yaw*45;
+        ctrl->Motor_Left_Front_PWM 	= (target->thrust-50)*75 +  target->angle.roll*450;//*45;
+        ctrl->Motor_Left_Back_PWM  	= (target->thrust-50)*75 +  target->angle.roll*450;
+        ctrl->Motor_Right_Front_PWM = (target->thrust-50)*75 -  target->angle.roll*450;
+        ctrl->Motor_Right_Back_PWM 	= (target->thrust-50)*75 -  target->angle.roll*450;
     }
     else
     {
