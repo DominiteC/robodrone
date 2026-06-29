@@ -1,3 +1,7 @@
+/*
+ * app_system.h
+ * 声明 app 层系统初始化入口，供启动编排模块调用。
+ */
 #ifndef __APP_SYSTEM_H
 #define __APP_SYSTEM_H
 

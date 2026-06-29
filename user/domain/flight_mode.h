@@ -1,3 +1,7 @@
+/*
+ * flight_mode.h
+ * 定义位置控制、飞控控制模式和姿态模式等领域枚举。
+ */
 #ifndef __FLIGHT_MODE_H__
 #define __FLIGHT_MODE_H__
 

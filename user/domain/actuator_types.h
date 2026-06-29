@@ -1,3 +1,7 @@
+/*
+ * actuator_types.h
+ * 定义电机、电调和执行器输出相关的领域数据结构。
+ */
 #ifndef __ACTUATOR_TYPES_H__
 #define __ACTUATOR_TYPES_H__
 

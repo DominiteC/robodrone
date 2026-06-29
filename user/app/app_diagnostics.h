@@ -1,3 +1,7 @@
+/*
+ * app_diagnostics.h
+ * 声明 app 层启动诊断接口。
+ */
 #ifndef __APP_DIAGNOSTICS_H
 #define __APP_DIAGNOSTICS_H
 

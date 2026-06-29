@@ -1,3 +1,7 @@
+/*
+ * vehicle_state.h
+ * 定义飞行器当前状态和控制目标设定值。
+ */
 #ifndef __VEHICLE_STATE_H__
 #define __VEHICLE_STATE_H__
 

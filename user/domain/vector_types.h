@@ -1,3 +1,7 @@
+/*
+ * vector_types.h
+ * 定义无人机领域常用的向量、角度、加速度和二维位置类型。
+ */
 #ifndef __VECTOR_TYPES_H__
 #define __VECTOR_TYPES_H__
 

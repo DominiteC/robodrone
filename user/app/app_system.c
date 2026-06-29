@@ -1,3 +1,8 @@
+/*
+ * app_system.c
+ * 负责系统启动阶段的全局服务、设备和业务模块初始化编排。
+ * 本文件只维护初始化顺序，不直接创建 FreeRTOS 任务。
+ */
 #include "app_system.h"
 #include "app_config.h"
 #include "usart_port.h"

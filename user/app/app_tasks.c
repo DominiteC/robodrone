@@ -1,3 +1,8 @@
+/*
+ * app_tasks.c
+ * 负责集中创建 FreeRTOS 业务任务，并维护任务栈大小和优先级。
+ * 本文件不负责设备初始化和控制算法实现。
+ */
 #include "app_tasks.h"
 #include "app_config.h"
 #include "alarm.h"

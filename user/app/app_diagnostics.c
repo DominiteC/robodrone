@@ -1,3 +1,7 @@
+/*
+ * app_diagnostics.c
+ * 负责启动完成后的基础诊断日志输出。
+ */
 #include "app_diagnostics.h"
 #include "C_code_Log.h"
 

@@ -1,3 +1,7 @@
+/*
+ * drone_params.h
+ * 定义机体物理参数和动力学参数结构。
+ */
 #ifndef __DRONE_PARAMS_H__
 #define __DRONE_PARAMS_H__
 
