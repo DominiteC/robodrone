@@ -477,3 +477,17 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认陀螺仪数据、遥控接收和发送任务表现不变。
+
+## 第三十阶段：移除 structConfig 兼容头文件
+
+本阶段删除已经没有源码引用的历史兼容头文件。
+
+- 删除 `user/abstract/structConfig.h`。
+- 从 `MDK-ARM/project.uvprojx` 的 abstract 分组移除 `structConfig.h`。
+- 领域类型依赖统一通过 `user/domain` 下的精确头文件或兼容聚合头 `drone_types.h` 获取。
+- 提交描述：`重构：移除 structConfig 兼容头文件`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 如果出现找不到 `structConfig.h`，说明仍有漏掉的旧 include，需要改为对应的 domain 类型头文件。

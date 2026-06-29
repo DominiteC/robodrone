@@ -109,3 +109,9 @@ main.c
 - `gyro.c` 和 `remotedata.c` 开始直接依赖 `vector_types.h`。
 - `structConfig.h` 暂时保留，等待剩余引用清理完成后再移除。
 - 本阶段只调整 include，不改变运行逻辑。
+
+### 2026-06-29：移除 structConfig 兼容头文件
+
+- 删除已经没有源码引用的 `user/abstract/structConfig.h`。
+- Keil 工程 abstract 分组同步移除该文件。
+- 后续领域类型依赖应直接使用 `user/domain` 下的类型头文件。
