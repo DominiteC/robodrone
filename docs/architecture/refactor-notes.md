@@ -400,3 +400,21 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认 `Alarm`、`Send`、`Receive`、`Control`、`mtf_01`、`WDog` 任务仍正常运行。
 - 确认 `ENABLE_GCS_SERIAL` 和 `USE_USMART_OR_ANO` 的任务选择行为不变。
+
+## 第二十五阶段：拆分 app 系统初始化模块
+
+本阶段只拆分 app 层内部职责，不改变系统初始化行为。
+
+- 新增 `user/app/app_system.h` 和 `user/app/app_system.c`。
+- `App_InitSystemModules()` 从 `app_init.c` 迁移到 `app_system.c`。
+- 全局服务初始化、设备初始化、业务模块初始化仍按原顺序执行。
+- `usartDebug` 和 `USART_buf` 随串口初始化逻辑迁移到 `app_system.c`，符号名保持不变，兼容 `usmart_port.c` 的外部引用。
+- `app_init.c` 收敛为启动入口编排、任务启动调用和启动完成日志。
+- `MDK-ARM/project.uvprojx` 的 app 分组加入 `app_system.c/.h`。
+- 提交描述：`重构：拆分 app 系统初始化模块`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动日志、遥控数据、控制任务、发送任务、接收任务和看门狗任务表现不变。
+- 确认电机、电调和电杆初始状态不异常。
