@@ -4,7 +4,7 @@
 #include "stdbool.h"
 #include "usart.h"
 #include "jy901p.h"
-#include "structConfig.h"
+#include "vector_types.h"
 #define GYRO_USART_HANDLE &huart3
 
 void gyro_init(void);

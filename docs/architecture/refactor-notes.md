@@ -450,3 +450,17 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认控制、遥控、通信和姿态/位置数据表现不变。
 - 后续再逐个模块替换为更精确的领域头文件 include。
+## 第二十八阶段：收敛领域类型 include 依赖
+
+本阶段开始使用拆分后的领域类型头文件，只调整头文件依赖，不改变数据结构和运行逻辑。
+
+- `gyro.h` 和 `position.h` 改为直接 include `vector_types.h`。
+- `remotedata.h` 改为直接 include `vector_types.h`。
+- `commander.h` 改为直接 include `flight_mode.h` 和 `vehicle_state.h`。
+- 保留 `drone_types.h` 作为旧模块兼容聚合头。
+- 提交描述：`重构：收敛领域类型 include 依赖`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认遥控数据、控制目标、姿态/位置数据表现不变。

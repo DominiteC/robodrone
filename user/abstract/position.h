@@ -1,7 +1,7 @@
 #ifndef __POSITION_H__
 #define __POSITION_H__
 
-#include "structConfig.h"
+#include "vector_types.h"
 
 #define DEG_TO_RAD (3.14159265f / 180.0f)  // 度转弧度
 

@@ -97,3 +97,9 @@ main.c
 - 新增本文档，用于记录当前架构、文件职责和后续架构变更。
 - 为已新增的 app/domain 文件补充文件级职责注释。
 - 本阶段不改变运行逻辑。
+
+### 2026-06-29：收敛领域类型 include 依赖
+
+- `gyro.h`、`position.h` 和 `remotedata.h` 开始直接依赖 `vector_types.h`。
+- `commander.h` 开始直接依赖 `flight_mode.h` 和 `vehicle_state.h`。
+- 本阶段只调整头文件依赖，不改变运行逻辑。

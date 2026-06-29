@@ -3,7 +3,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "drone_types.h"
+#include "flight_mode.h"
+#include "vehicle_state.h"
 #include "remotedata.h"
 
 #define COMMANDER_WDT_TIMEOUT_STABILIZE  500
