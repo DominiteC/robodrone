@@ -434,3 +434,19 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认启动完成日志仍输出 `Free heap` 和 `你好世界`。
 - 确认启动、遥控、控制、发送、接收和看门狗任务表现不变。
+
+## 第二十七阶段：拆分领域类型头文件
+
+本阶段只拆分领域类型声明，不改变已有模块 include 关系和运行行为。
+
+- 新增 `vector_types.h`、`flight_mode.h`、`vehicle_state.h`、`actuator_types.h` 和 `drone_params.h`。
+- `drone_types.h` 收敛为兼容聚合头，继续向现有模块提供原来的全部类型。
+- 现有 `control.h`、`commander.h`、`remotedata.h` 等文件仍可继续 include `drone_types.h`。
+- `MDK-ARM/project.uvprojx` 的 domain 分组加入新的领域类型头文件。
+- 提交描述：`重构：拆分领域类型头文件`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认控制、遥控、通信和姿态/位置数据表现不变。
+- 后续再逐个模块替换为更精确的领域头文件 include。

@@ -1766,6 +1766,31 @@
           <GroupName>domain</GroupName>
           <Files>
             <File>
+              <FileName>vector_types.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\domain\vector_types.h</FilePath>
+            </File>
+            <File>
+              <FileName>flight_mode.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\domain\flight_mode.h</FilePath>
+            </File>
+            <File>
+              <FileName>vehicle_state.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\domain\vehicle_state.h</FilePath>
+            </File>
+            <File>
+              <FileName>actuator_types.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\domain\actuator_types.h</FilePath>
+            </File>
+            <File>
+              <FileName>drone_params.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\domain\drone_params.h</FilePath>
+            </File>
+            <File>
               <FileName>drone_types.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\domain\drone_types.h</FilePath>
