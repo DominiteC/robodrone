@@ -464,3 +464,16 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认遥控数据、控制目标、姿态/位置数据表现不变。
+## 第二十九阶段：移除干净源文件中的 structConfig 间接类型依赖
+
+本阶段继续收敛领域类型 include 依赖，只调整干净源文件的头文件引用。
+
+- `gyro.c` 改为直接 include `vector_types.h`。
+- `remotedata.c` 改为直接 include `vector_types.h`。
+- 不修改函数实现、控制逻辑、通信协议和任务行为。
+- 提交描述：`重构：移除源文件中的 structConfig 间接依赖`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认陀螺仪数据、遥控接收和发送任务表现不变。

@@ -103,3 +103,9 @@ main.c
 - `gyro.h`、`position.h` 和 `remotedata.h` 开始直接依赖 `vector_types.h`。
 - `commander.h` 开始直接依赖 `flight_mode.h` 和 `vehicle_state.h`。
 - 本阶段只调整头文件依赖，不改变运行逻辑。
+
+### 2026-06-29：移除干净源文件中的 structConfig 间接类型依赖
+
+- `gyro.c` 和 `remotedata.c` 开始直接依赖 `vector_types.h`。
+- `structConfig.h` 暂时保留，等待剩余引用清理完成后再移除。
+- 本阶段只调整 include，不改变运行逻辑。

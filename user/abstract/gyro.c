@@ -13,7 +13,7 @@
 #include "usart_port.h"
 #include "usart.h"
 #include "Mydelay.h"
-#include "structConfig.h"
+#include "vector_types.h"
 #include "arm_transform.h"
 #include "watchdog_guard.h"
 #include "FreeRTOS.h"

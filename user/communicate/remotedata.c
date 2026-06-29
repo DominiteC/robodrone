@@ -1,7 +1,7 @@
 #include "remotedata.h"
 #include "wireless.h"
 #include "alarm.h"
-#include "structConfig.h"
+#include "vector_types.h"
 #include "gyro.h"
 #include "IT_Callback.h"
 #include "position.h"
