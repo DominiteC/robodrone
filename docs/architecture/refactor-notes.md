@@ -384,3 +384,19 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认启动日志、遥控数据、控制任务、发送任务、接收任务和看门狗任务表现不变。
 - 如果出现链接错误，优先检查是否还有源码 include `rtos_init.h` 或引用 `RTOS_*` 启动函数。
+
+## 第二十四阶段：拆分 app 任务创建模块
+
+本阶段只拆分 app 层内部职责，不改变任务创建行为。
+
+- 新增 `user/app/app_tasks.h` 和 `user/app/app_tasks.c`。
+- `App_StartTasks()` 改为调用 `App_CreateTasks()`。
+- 任务栈大小、优先级、任务名和创建顺序保持不变。
+- `usmart_task()` 从 `app_init.c` 移入 `app_tasks.c`，仍保持文件内静态函数。
+- `MDK-ARM/project.uvprojx` 的 app 分组加入 `app_tasks.c/.h`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认 `Alarm`、`Send`、`Receive`、`Control`、`mtf_01`、`WDog` 任务仍正常运行。
+- 确认 `ENABLE_GCS_SERIAL` 和 `USE_USMART_OR_ANO` 的任务选择行为不变。

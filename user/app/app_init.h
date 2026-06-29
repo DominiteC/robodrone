@@ -3,7 +3,7 @@
 
 /*
  * app 层启动编排接口。
- * App_* 接口是当前推荐入口，RTOS_* 接口仅保留为兼容入口。
+ * App_InitTask 是当前启动入口，具体任务创建由 app_tasks 模块负责。
  */
 void App_Init(void);
 void App_InitSystemModules(void);
