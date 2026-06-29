@@ -1781,6 +1781,11 @@
               <FilePath>..\user\domain\drone_params.h</FilePath>
             </File>
             <File>
+              <FileName>drone_params.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\domain\drone_params.c</FilePath>
+            </File>
+            <File>
               <FileName>drone_types.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\domain\drone_types.h</FilePath>

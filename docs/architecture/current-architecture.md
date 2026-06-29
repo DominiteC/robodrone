@@ -46,7 +46,7 @@ main.c
 | `flight_mode.h` | 位置控制模式、控制模式、姿态模式等枚举。 |
 | `vehicle_state.h` | 飞行器当前状态 `state_t` 和控制目标 `setpoint_t`。 |
 | `actuator_types.h` | 电机、电调和执行器输出相关类型，例如 `MotorCtrl`。 |
-| `drone_params.h` | 机体物理参数和动力学参数，例如 `DroneParams`。 |
+| `drone_params.c/.h` | 机体物理参数和动力学参数，例如 `DroneParams` 和当前机体参数 `drone`。 |
 
 ### control 层：飞控逻辑
 
@@ -164,3 +164,10 @@ main.c
 - `control.h` 通过 `control_pid.h` 暴露已有 PID 实例，兼容 `ANO_DT` 等调参/回传代码。
 - `control.c` 不再直接承载大段 PID 参数配置，但继续执行控制算法、PID 计算和复位逻辑。
 - 本阶段不改变任何 PID 参数数值、初始化顺序、控制算法和任务行为。
+
+### 2026-06-29：迁移机体参数定义到 domain 层
+
+- 新增 `drone_params.c`，承接当前机体物理参数实例 `drone`。
+- `drone_params.h` 继续定义 `DroneParams` 类型，并声明 `extern const DroneParams drone`。
+- `control.c` 不再直接定义机体参数，控制主文件继续只关注控制任务和控制算法。
+- 本阶段不改变任何机体参数数值、控制算法和任务行为。

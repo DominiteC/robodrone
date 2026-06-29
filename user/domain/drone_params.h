@@ -22,4 +22,6 @@ typedef struct _DroneParams
 	float arm_len_y;
 } DroneParams;
 
+extern const DroneParams drone;
+
 #endif

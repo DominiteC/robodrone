@@ -596,3 +596,20 @@
 - 烧录后确认启动日志正常，遥控数据持续更新。
 - 确认 `ANO_DT` PID 回传/调参相关功能未出现链接错误或异常。
 - 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。
+
+## 第三十七阶段：迁移机体参数定义到 domain 层
+
+本阶段把机体物理参数从控制主文件中移出，收敛到领域层。
+
+- 新增 `user/domain/drone_params.c`，承接 `const DroneParams drone`。
+- `user/domain/drone_params.h` 增加 `extern const DroneParams drone;` 声明。
+- `control.c` 删除原来的 `drone` 参数定义。
+- Keil 工程 domain 分组加入 `drone_params.c`。
+- 本阶段不修改任何机体参数数值、控制算法、任务周期和硬件动作。
+- 提交描述：`重构：迁移机体参数定义到领域层`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动日志正常，控制任务正常运行。
+- 若后续代码开始使用 `drone`，统一从 `drone_params.h` 获取声明。
