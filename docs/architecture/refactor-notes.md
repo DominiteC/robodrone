@@ -557,3 +557,22 @@
 - 烧录后确认启动日志正常，遥控数据持续更新。
 - 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。
 - 确认电机、电调、舵机、电杆初始状态无异常。
+
+## 第三十五阶段：拆分控制输出和安全保护模块
+
+本阶段继续深入拆分控制层，把硬件输出落地和运行时安全保护从 `control.c` 中移出。
+
+- 新增 `user/control/control_output.c/.h`，承接 `MotorControl()`。
+- 新增 `user/control/control_safety.c/.h`，承接 `safeCheck()`。
+- `control.c` include `control_output.h` 和 `control_safety.h`，主循环调用顺序保持为 `safeCheck()`、记录 `debugEsc`、`MotorControl()`。
+- `control.c` 不再直接 include `esc.h`、`motor.h`、`alarm.h`。
+- Keil 工程 control 分组加入 `control_output.c/.h` 和 `control_safety.c/.h`。
+- 本阶段不修改安全阈值、报警模式、输出数值、任务周期、PID 参数、控制模式判断和硬件动作。
+- 提交描述：`重构：拆分控制输出和安全保护模块`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动日志正常，遥控数据持续更新。
+- 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。
+- 重点确认电调、电机、舵机、电杆初始状态无异常。

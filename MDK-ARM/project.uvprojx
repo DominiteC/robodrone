@@ -1856,6 +1856,26 @@
               <FilePath>..\user\control\control_state.h</FilePath>
             </File>
             <File>
+              <FileName>control_output.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\control\control_output.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_output.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\control\control_output.h</FilePath>
+            </File>
+            <File>
+              <FileName>control_safety.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\control\control_safety.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_safety.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\control\control_safety.h</FilePath>
+            </File>
+            <File>
               <FileName>PIDcontroller.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\control\PIDcontroller.c</FilePath>
@@ -1865,7 +1885,6 @@
               <FileType>1</FileType>
               <FilePath>..\user\control\change.c</FilePath>
             </File>
-
           </Files>
         </Group>
         <Group>

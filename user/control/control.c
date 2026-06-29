@@ -1,7 +1,7 @@
 #include "control.h"
 #include "control_state.h"
-#include "esc.h"
-#include "motor.h"
+#include "control_output.h"
+#include "control_safety.h"
 #include "stdlib.h"
 #include <math.h>
 #include "remotedata.h"
@@ -9,7 +9,6 @@
 #include "servo.h"
 #include "watchdog_guard.h"
 #include "log.h"
-#include "alarm.h"
 #include "change.h"
 #include "Mydelay.h"
 #include "watchdog_guard.h"
@@ -254,9 +253,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick);
 void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state);
 void Walk_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state);
 
-void MotorControl(MotorCtrl* ctrl);
 
-void safeCheck(MotorCtrl* ctrl, state_t* state);
 static float wrapYawDisplay(float yaw);
 
 void Control_Init(void)
@@ -363,21 +360,6 @@ void Control_Task(void *param)
         MotorControl(&control);
         vTaskDelayUntil(&lastWakeTime, 1);		/*1ms周期延时*/
     }
-}
-
-/**
- * @brief 电机控制
- * 
- * @param ctrl 电机控制数据结构体
- */
-void MotorControl(MotorCtrl* ctrl)
-{
-    ESC_Set_Percent(ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4);
-    Motor_Set_PWM(ctrl->Motor_Left_Front_PWM,ctrl->Motor_Left_Back_PWM,
-                ctrl->Motor_Right_Front_PWM,ctrl->Motor_Right_Back_PWM);
-    // if (myDelay((uint32_t)MotorControl,100))
-    //     LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f  motor:%d,%d",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4,
-    //                 ctrl->Motor_Left_Front_PWM,ctrl->Motor_Right_Front_PWM);
 }
 
 /**
@@ -860,65 +842,3 @@ void Walk_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     ctrl->Esc_Percent_3 = 0;
     ctrl->Esc_Percent_4 = 0;
 }
-
-
-void safeCheck(MotorCtrl* ctrl, state_t* state)
-{
-    static bool safety_triggered = false;
-
-    if (!isfinite(state->angle.roll) || !isfinite(state->angle.pitch) ||
-        !isfinite(state->gyro.x) || !isfinite(state->gyro.y) || !isfinite(state->gyro.z) ||
-        !isfinite(state->height))
-    {
-        setCommanderSafetyLatched(true);
-        setCommanderKeyFlight(false);
-        setCommanderKeyland(false);
-        state->isRCLocked = true;
-
-        ctrl->Esc_Percent_1 = 0;
-        ctrl->Esc_Percent_2 = 0;
-        ctrl->Esc_Percent_3 = 0;
-        ctrl->Esc_Percent_4 = 0;
-
-        Alarm_SetMode(ALARM_MODE_ERROR);
-        MotorControl(ctrl);
-        LOG_ERROR("safeCheck invalid state value, force lock");
-        safety_triggered = true;
-        return;
-    }
-    
-    if (getCommanderAttitudeMode() == MODE_AIRPLANE && (fabsf(state->angle.roll) > 45 || fabsf(state->angle.pitch) > 45))
-    {
-        if (!safety_triggered)
-        {
-            setCommanderKeyFlight(false);
-            setCommanderKeyland(false);
-
-            ctrl->Esc_Percent_1 = 0;
-            ctrl->Esc_Percent_2 = 0;
-            ctrl->Esc_Percent_3 = 0;
-            ctrl->Esc_Percent_4 = 0;
-
-            Alarm_SetMode(ALARM_MODE_ERROR);
-
-            MotorControl(ctrl);
-            
-            LOG_ERROR("安全触发：姿态超限 (roll=%.1f°, pitch=%.1f°)", state->angle.roll, state->angle.pitch);
-            safety_triggered = true;
-        }
-    }
-    else
-    {
-        if (safety_triggered)
-        {
-            LOG_INFO("安全状态恢复：姿态正常");
-            safety_triggered = false;
-        }
-    }
-}
-
-
-
-
-
-

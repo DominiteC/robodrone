@@ -56,6 +56,8 @@ main.c
 | --- | --- |
 | `control.c/.h` | 控制任务入口、模式判断、PID 初始化、姿态/高度/位置控制、输出混控和安全保护。后续继续按职责拆分。 |
 | `control_state.c/.h` | 控制状态刷新和状态打印。负责从陀螺仪、光流/定位模块读取 `state_t` 所需数据。 |
+| `control_output.c/.h` | 控制输出落地。负责把 `MotorCtrl` 写入电调和电机驱动。 |
+| `control_safety.c/.h` | 运行时安全检查。负责异常状态锁定、姿态超限保护和安全输出切断。 |
 | `PIDcontroller.c/.h` | PID 控制器实现和参数结构。 |
 | `change.c/.h` | 形态/姿态切换相关控制逻辑。 |
 
@@ -147,3 +149,10 @@ main.c
 - 新增 `control_state.c/.h`，承接 `refreshState()` 和 `printState()`。
 - `control.c` 通过 `control_state.h` 调用状态刷新，不再直接承载状态采集函数实现。
 - 本阶段不改变状态刷新顺序、控制算法、任务周期、PID 参数、输出混控和安全保护逻辑。
+
+### 2026-06-29：拆分控制输出和安全保护模块
+
+- 新增 `control_output.c/.h`，承接 `MotorControl()`，隔离电调和电机驱动调用。
+- 新增 `control_safety.c/.h`，承接 `safeCheck()`，隔离运行时安全保护逻辑。
+- `control.c` 继续负责任务主循环和控制算法调用，但不再直接 include `esc.h`、`motor.h`、`alarm.h`。
+- 本阶段不改变安全阈值、输出数值、控制算法、任务周期和硬件动作。
