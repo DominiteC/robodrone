@@ -1,3 +1,8 @@
+/*
+ * remotedata.c
+ * 负责遥控数据帧解析、遥控命令处理和遥控端状态回传。
+ * 本文件属于业务服务层，无线芯片收发仍由底层无线模块负责。
+ */
 #include "remotedata.h"
 #include "wireless.h"
 #include "alarm.h"

@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F407xx,ARM_MATH_CM4</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../user/domain;../user/app;../user/tool;../user/tool/log;../user/tool/log/lwrb;../user/tool/log/printf;../user/tool/USMART;../user/sys;../user/hardware/usart;../user/module;../user/module/mtf01;../user/module/bn220;../user/module/motor;../user/module/gyro;../user/module/bmp280;../user/module/RF;../user/module/at24c02;../user/abstract;../user/control;../user/communicate;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/ST/ARM/DSP/Inc</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../user/domain;../user/app;../user/tool;../user/tool/log;../user/tool/log/lwrb;../user/tool/log/printf;../user/tool/USMART;../user/sys;../user/hardware/usart;../user/module;../user/module/mtf01;../user/module/bn220;../user/module/motor;../user/module/gyro;../user/module/bmp280;../user/module/RF;../user/module/at24c02;../user/abstract;../user/control;../user/services;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/ST/ARM/DSP/Inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1869,17 +1869,27 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>communicate</GroupName>
+          <GroupName>services</GroupName>
           <Files>
             <File>
               <FileName>remotedata.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\communicate\remotedata.c</FilePath>
+              <FilePath>..\user\services\remotedata.c</FilePath>
             </File>
             <File>
               <FileName>commander.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\communicate\commander.c</FilePath>
+              <FilePath>..\user\services\commander.c</FilePath>
+            </File>
+            <File>
+              <FileName>remotedata.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\services\remotedata.h</FilePath>
+            </File>
+            <File>
+              <FileName>commander.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\services\commander.h</FilePath>
             </File>
           </Files>
         </Group>

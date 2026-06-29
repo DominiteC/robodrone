@@ -1,3 +1,7 @@
+/*
+ * remotedata.h
+ * 声明遥控数据服务接口和遥控数据结构。
+ */
 #ifndef __REMOTEDATA_H__
 #define __REMOTEDATA_H__
 

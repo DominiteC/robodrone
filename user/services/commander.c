@@ -1,4 +1,9 @@
-﻿#include "commander.h"
+/*
+ * commander.c
+ * 负责把遥控输入、飞行模式和安全状态转换为控制目标 setpoint。
+ * 本文件属于业务服务层，不直接实现控制算法和硬件驱动。
+ */
+#include "commander.h"
 #include "C_code_Log.h"
 #include "control.h"
 #include "PIDcontroller.h"

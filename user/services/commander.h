@@ -1,3 +1,7 @@
+/*
+ * commander.h
+ * 声明遥控命令服务接口，向控制层提供控制目标和模式状态。
+ */
 #ifndef __COMMANDER_H__
 #define __COMMANDER_H__
 

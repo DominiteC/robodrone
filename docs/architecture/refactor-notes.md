@@ -491,3 +491,20 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 如果出现找不到 `structConfig.h`，说明仍有漏掉的旧 include，需要改为对应的 domain 类型头文件。
+
+## 第三十一阶段：迁移遥控业务到 services 层
+
+本阶段开始建立 services 层，将遥控业务从旧 communicate 目录迁出。
+
+- 新增 `user/services` 目录。
+- `commander.c/.h` 从 `user/communicate` 迁移到 `user/services`，作为遥控命令服务。
+- `remotedata.c/.h` 从 `user/communicate` 迁移到 `user/services`，作为遥控数据服务。
+- Keil include path 从 `user/communicate` 调整为 `user/services`。
+- Keil 工程分组从 `communicate` 调整为 `services`，并补充对应头文件条目。
+- 本阶段只迁移文件位置和职责归属，不修改遥控协议、控制目标生成逻辑和任务行为。
+- 提交描述：`重构：迁移遥控业务到 services 层`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认遥控接收、模式切换、控制目标生成和 Send 任务表现不变。

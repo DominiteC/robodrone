@@ -52,11 +52,12 @@ main.c
 
 `user/control` 当前仍承载控制任务、控制模式判断、姿态/位置控制、安全保护和输出混控。该层风险最高，后续拆分时必须先搬函数、不改算法，并且每一步都要 Build 和上板验证。
 
-### communicate / abstract / module 层
+### services / communicate / abstract / module 层
 
 当前通信、传感器、定位和硬件适配仍有历史混合情况：
 
-- `user/communicate`：遥控命令、地面站和通信数据处理。
+- `user/services`：遥控数据服务、遥控命令服务等业务服务。`commander` 负责控制目标生成，`remotedata` 负责遥控数据帧解析和状态回传。
+- `user/communicate`：后续保留给地面站协议、通信协议适配等更偏协议层的代码。
 - `user/abstract`：部分传感器、定位、无线、调试协议等抽象模块。
 - `user/module` / `hardware`：芯片驱动、外设适配和底层硬件访问。
 
@@ -115,3 +116,9 @@ main.c
 - 删除已经没有源码引用的 `user/abstract/structConfig.h`。
 - Keil 工程 abstract 分组同步移除该文件。
 - 后续领域类型依赖应直接使用 `user/domain` 下的类型头文件。
+
+### 2026-06-29：迁移遥控业务到 services 层
+
+- `commander.c/.h` 和 `remotedata.c/.h` 从 `user/communicate` 迁移到 `user/services`。
+- Keil 工程 include path 和分组同步调整为 `services`。
+- 本阶段不改变遥控协议、控制目标生成逻辑和任务行为。
