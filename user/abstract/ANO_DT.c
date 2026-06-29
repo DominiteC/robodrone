@@ -158,18 +158,20 @@ void ANO_DT_Data_Exchange(void *param)
 		if(f.send_rcdata)
 		{
 			f.send_rcdata = 0;
-ANO_DT_Send_RCDataFloat(target.pos.x,               // 1-目标X位置 cm
-                        target.pos.y,               // 2-目标Y位置 cm
-												state.position.x,           // 3-X位置 cm
-                        state.position.y,           // 4-Y位置 cm
-												debug_target_angle_pitch,     // 5-目标pitch角度(速度环输出)
-                        debug_target_angle_roll,      // 6-目标roll角度(速度环输出)
-                        state.velocity.x,           // 7-X速度 cm/s
-                        state.velocity.y,           // 8-Y速度 cm/s                       
-                        state.gyro.z,          // 9-当前定高油门值                       
-                        pid_yaw_angle.Output,          // 10-X速度误差
-                        state.angle.yaw,          // 11-Y速度误差
-                        debug_target_angle_yaw                  // 12-Z轴加速度 cm/s²
+ANO_DT_Send_RCDataFloat(
+												debugEsc.Esc_Percent_1,        // 1-ESC1 percent
+												debugEsc.Esc_Percent_2,        // 2-ESC2 percent
+                        debugEsc.Esc_Percent_3,        // 3-ESC3 percent
+												debugEsc.Esc_Percent_4,        // 4-ESC4 percent
+                        state.position.y,           // 5-state Y position cm
+												debug_target_angle_pitch,     // 6-target pitch angle
+                        debug_target_angle_roll,      // 7-target roll angle
+                        state.velocity.x,           // 8-X velocity cm/s
+                        state.velocity.y,           // 9-Y velocity cm/s
+                        state.gyro.z,              // 10-gyro Z
+                        pid_yaw_angle.Output,      // 11-yaw angle PID output
+                        getCommanderKeyland()           // 12-yaw angle
+                              // land flag
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	

@@ -174,8 +174,8 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
                     }
                 }
 
-                raw_vx = payload.flow_vel_y * (distance_filtered / 1000.0f); // cm/s
-                raw_vy = -payload.flow_vel_x * (distance_filtered / 1000.0f); // cm/s
+                raw_vx = -payload.flow_vel_x * (distance_filtered / 1000.0f); // cm/s
+                raw_vy = -payload.flow_vel_y * (distance_filtered / 1000.0f); // cm/s
                 final_vx = raw_vx * tilt_factor;
                 final_vy = raw_vy * tilt_factor;
 

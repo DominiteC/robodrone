@@ -58,6 +58,7 @@ extern float debug_target_angle_pitch;
 extern float debug_target_angle_roll;
 extern float debug_target_angle_yaw;
 extern state_t state;
+extern MotorCtrl debugEsc;
 
 void Control_Init(void);
 void ResetFlightControlPIDs(void);

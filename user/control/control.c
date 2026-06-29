@@ -212,7 +212,7 @@ PID_Init_Config_s pid_yaw_rate_config = {
     .Kp = 0.6f,
     .Ki = 0.008f,
     .Kd = 0.001f,
-    .MaxOut = 15.0f, //限幅
+    .MaxOut = 10.0f, //限幅
     .DeadBand =1.0,//差值大于5才进行PID调节，防止抖动
     .DeadBandOutputMode = PID_DEADBAND_OUTPUT_ZERO,
     .Improve = PID_DeltaT_Limit | PID_Integral_Limit | PID_Derivative_On_Measurement | PID_DerivativeFilter,
@@ -242,6 +242,7 @@ float debug_target_angle_roll = 0.0f;
 float debug_target_angle_yaw = 0.0f;
 
 static MotorCtrl control;
+MotorCtrl debugEsc;
 setpoint_t target;
 state_t state;
 
@@ -360,6 +361,7 @@ void Control_Task(void *param)
 					}
 				}
         safeCheck(&control,&state);
+        debugEsc = control;
         MotorControl(&control);
         vTaskDelayUntil(&lastWakeTime, 1);		/*1ms周期延时*/
     }
@@ -457,17 +459,18 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     // 设置电调输出
     if (!state->isRCLocked && throttle > 5)
     {
-			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;
+			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output;// - pid_yaw_rate.Output;
+			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output;// - pid_yaw_rate.Output;
+			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output;// + pid_yaw_rate.Output;
+			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output;// + pid_yaw_rate.Output;
 
 			 // 添加最小油门限制，确保电机不会停转
-			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 10, 85);
-			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 10, 85);
-			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 10, 85);
-			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 10, 85);
+			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 10, 24);
+			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 10, 24);
+			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 10, 24);
+			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 10, 24);
 //				ctrl->Esc_Percent_2 = 10;
+
         // LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4);
     }
     else
@@ -727,9 +730,9 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
     static uint16_t rampCnt = 0;
 
     #define TAKEOFF_START_THRUST  20.0f
-    #define LAND_END_THRUST       35.0f
+    #define LAND_END_THRUST       45.0f
     #define TAKEOFF_RAMP_CYCLE    500     /* 2秒 @250Hz */
-    #define LAND_RAMP_CYCLE       750     /* 3秒 @250Hz */
+    #define LAND_RAMP_CYCLE       1250    /* 5秒 @250Hz */
 
     //手动模式直接映射油门，定高模式才使用PID控制高度
     if (getCommanderCtrlMode() == MODE_MANUAL)
