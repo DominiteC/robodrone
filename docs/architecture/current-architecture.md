@@ -56,6 +56,7 @@ main.c
 | --- | --- |
 | `control.c/.h` | 控制任务入口、模式判断、姿态/高度/位置控制、输出混控和安全保护。后续继续按职责拆分。 |
 | `control_pid.c/.h` | PID 参数、PID 实例和控制初始化入口。负责集中维护 PID 配置。 |
+| `control_rates.h` | 控制任务频率、主循环周期和分频执行宏。 |
 | `control_state.c/.h` | 控制状态刷新和状态打印。负责从陀螺仪、光流/定位模块读取 `state_t` 所需数据。 |
 | `control_output.c/.h` | 控制输出落地。负责把 `MotorCtrl` 写入电调和电机驱动。 |
 | `control_safety.c/.h` | 运行时安全检查。负责异常状态锁定、姿态超限保护和安全输出切断。 |
@@ -171,3 +172,9 @@ main.c
 - `drone_params.h` 继续定义 `DroneParams` 类型，并声明 `extern const DroneParams drone`。
 - `control.c` 不再直接定义机体参数，控制主文件继续只关注控制任务和控制算法。
 - 本阶段不改变任何机体参数数值、控制算法和任务行为。
+
+### 2026-06-29：拆分控制周期配置头文件
+
+- 新增 `control_rates.h`，承接控制任务频率、主循环周期和 `RATE_DO_EXECUTE()`。
+- `control.h` 改为 include `control_rates.h`，继续对外提供原有控制周期宏。
+- 本阶段不修改任何周期数值、任务周期、控制算法和硬件动作。

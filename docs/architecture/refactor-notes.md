@@ -613,3 +613,20 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认启动日志正常，控制任务正常运行。
 - 若后续代码开始使用 `drone`，统一从 `drone_params.h` 获取声明。
+
+## 第三十八阶段：拆分控制周期配置头文件
+
+本阶段继续收敛控制层公共配置，把控制频率和周期宏从 `control.h` 中拆出。
+
+- 新增 `user/control/control_rates.h`。
+- `control_rates.h` 承接 `RATE_*`、`MAIN_LOOP_RATE`、`MAIN_LOOP_DT`、`RATE_DO_EXECUTE()` 以及各控制环频率/周期宏。
+- `control.h` include `control_rates.h`，保持原来 include `control.h` 的代码仍能获得这些宏。
+- Keil 工程 control 分组加入 `control_rates.h`。
+- 本阶段不修改任何周期数值、任务周期、控制算法、PID 参数和硬件动作。
+- 提交描述：`重构：拆分控制周期配置头文件`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认 `Control` 任务 1ms 主循环表现不变。
+- 确认遥控数据、控制输出和看门狗任务正常运行。

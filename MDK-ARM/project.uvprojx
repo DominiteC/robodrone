@@ -1861,6 +1861,11 @@
               <FilePath>..\user\control\control_pid.h</FilePath>
             </File>
             <File>
+              <FileName>control_rates.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\control\control_rates.h</FilePath>
+            </File>
+            <File>
               <FileName>control_state.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\control\control_state.c</FilePath>
