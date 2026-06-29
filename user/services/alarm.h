@@ -1,3 +1,7 @@
+/*
+ * alarm.h
+ * 声明告警服务接口，供 app、control 和遥控数据服务调用。
+ */
 #ifndef __ALARM_H__
 #define __ALARM_H__
 

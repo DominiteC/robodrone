@@ -523,3 +523,18 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认遥控接收、遥控回传、Receive 任务和 Send 任务表现不变。
+
+## 第三十三阶段：迁移告警服务到 services 层
+
+本阶段继续建立 services 层，将电池和告警状态服务从旧 abstract 目录迁出。
+
+- `alarm.c/.h` 从 `user/abstract` 迁移到 `user/services`。
+- `alarm` 继续负责电池电压/电流检测、蜂鸣器和 LED 告警状态更新。
+- Keil 工程 abstract 分组移除 `alarm.c`，services 分组加入 `alarm.c/.h`。
+- 本阶段不修改告警阈值、告警状态机、任务周期和硬件输出行为。
+- 提交描述：`重构：迁移告警服务到 services 层`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认电池检测、蜂鸣器、LED 告警和 Alarm 任务表现不变。

@@ -1,3 +1,8 @@
+/*
+ * alarm.c
+ * 负责电池电压/电流检测、蜂鸣器和 LED 告警状态更新。
+ * 本文件属于 services 层，底层 GPIO/ADC 访问仍由 HAL 和硬件配置提供。
+ */
 #include "alarm.h"
 #include "Mydelay.h"
 #include "adc.h"
