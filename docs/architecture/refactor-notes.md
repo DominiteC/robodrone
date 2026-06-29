@@ -418,3 +418,19 @@
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认启动日志、遥控数据、控制任务、发送任务、接收任务和看门狗任务表现不变。
 - 确认电机、电调和电杆初始状态不异常。
+
+## 第二十六阶段：拆分 app 启动诊断模块
+
+本阶段继续收敛 app 层职责，只拆分启动完成日志，不改变启动行为。
+
+- 新增 `user/app/app_diagnostics.h` 和 `user/app/app_diagnostics.c`。
+- `App_LogStartupComplete()` 从 `app_init.c` 迁移到 `app_diagnostics.c`。
+- `app_init.c` 只保留启动编排、系统初始化调用、任务创建调用和删除自身。
+- `MDK-ARM/project.uvprojx` 的 app 分组加入 `app_diagnostics.c/.h`。
+- 提交描述：`重构：拆分 app 启动诊断模块`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动完成日志仍输出 `Free heap` 和 `你好世界`。
+- 确认启动、遥控、控制、发送、接收和看门狗任务表现不变。
