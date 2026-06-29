@@ -1,4 +1,9 @@
-﻿#include "wireless.h"
+﻿/*
+ * wireless.c
+ * 负责无线链路的收发模式切换、链路恢复、接收回调和接收任务。
+ * 本文件属于 services 层，底层 nRF24L01P 芯片访问由 module/RF 驱动负责。
+ */
+#include "wireless.h"
 #include "C_code_Log.h"
 #include "Mydelay.h"
 #include "FreeRTOS.h"

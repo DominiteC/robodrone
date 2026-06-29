@@ -508,3 +508,18 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认遥控接收、模式切换、控制目标生成和 Send 任务表现不变。
+
+## 第三十二阶段：迁移无线链路服务到 services 层
+
+本阶段继续建立 services 层，将无线链路封装从旧 abstract 目录迁出。
+
+- `wireless.c/.h` 从 `user/abstract` 迁移到 `user/services`，作为无线链路服务。
+- `wireless` 继续调用 `module/RF/nRF24L01P` 驱动，不改变底层芯片访问逻辑。
+- Keil 工程 abstract 分组移除 `wireless.c`，services 分组加入 `wireless.c/.h`。
+- 本阶段不修改无线协议、收发任务、链路恢复策略和遥控数据处理逻辑。
+- 提交描述：`重构：迁移无线链路服务到 services 层`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认遥控接收、遥控回传、Receive 任务和 Send 任务表现不变。

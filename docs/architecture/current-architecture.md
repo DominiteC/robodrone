@@ -56,7 +56,7 @@ main.c
 
 当前通信、传感器、定位和硬件适配仍有历史混合情况：
 
-- `user/services`：遥控数据服务、遥控命令服务等业务服务。`commander` 负责控制目标生成，`remotedata` 负责遥控数据帧解析和状态回传。
+- `user/services`：遥控数据服务、遥控命令服务等业务服务。`commander` 负责控制目标生成，`remotedata` 负责遥控数据帧解析和状态回传，`wireless` 负责无线链路收发和恢复。
 - `user/communicate`：后续保留给地面站协议、通信协议适配等更偏协议层的代码。
 - `user/abstract`：部分传感器、定位、无线、调试协议等抽象模块。
 - `user/module` / `hardware`：芯片驱动、外设适配和底层硬件访问。
@@ -122,3 +122,9 @@ main.c
 - `commander.c/.h` 和 `remotedata.c/.h` 从 `user/communicate` 迁移到 `user/services`。
 - Keil 工程 include path 和分组同步调整为 `services`。
 - 本阶段不改变遥控协议、控制目标生成逻辑和任务行为。
+
+### 2026-06-29：迁移无线链路服务到 services 层
+
+- `wireless.c/.h` 从 `user/abstract` 迁移到 `user/services`。
+- `wireless` 作为无线链路服务，底层芯片访问仍由 `module/RF/nRF24L01P` 驱动负责。
+- 本阶段不改变无线协议、接收任务和链路恢复行为。

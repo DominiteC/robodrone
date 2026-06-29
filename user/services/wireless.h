@@ -1,3 +1,7 @@
+/*
+ * wireless.h
+ * 声明无线链路服务接口，供遥控数据服务和 app 任务创建模块调用。
+ */
 #ifndef __WIRELESS_H_
 #define __WIRELESS_H_
 

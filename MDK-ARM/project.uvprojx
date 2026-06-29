@@ -1741,11 +1741,6 @@
               <FilePath>..\user\abstract\gyro.c</FilePath>
             </File>
             <File>
-              <FileName>wireless.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\abstract\wireless.c</FilePath>
-            </File>
-            <File>
               <FileName>alarm.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\abstract\alarm.c</FilePath>
@@ -1890,6 +1885,16 @@
               <FileName>commander.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\services\commander.h</FilePath>
+            </File>
+            <File>
+              <FileName>wireless.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\services\wireless.c</FilePath>
+            </File>
+            <File>
+              <FileName>wireless.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\services\wireless.h</FilePath>
             </File>
           </Files>
         </Group>
