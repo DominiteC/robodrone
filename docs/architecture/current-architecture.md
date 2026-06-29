@@ -50,7 +50,14 @@ main.c
 
 ### control 层：飞控逻辑
 
-`user/control` 当前仍承载控制任务、控制模式判断、姿态/位置控制、安全保护和输出混控。该层风险最高，后续拆分时必须先搬函数、不改算法，并且每一步都要 Build 和上板验证。
+`user/control` 承载飞控核心逻辑。当前已经开始从大文件 `control.c` 中拆出边界清晰的子模块，但控制算法、任务周期和输出行为仍保持原样。
+
+| 文件 | 作用 |
+| --- | --- |
+| `control.c/.h` | 控制任务入口、模式判断、PID 初始化、姿态/高度/位置控制、输出混控和安全保护。后续继续按职责拆分。 |
+| `control_state.c/.h` | 控制状态刷新和状态打印。负责从陀螺仪、光流/定位模块读取 `state_t` 所需数据。 |
+| `PIDcontroller.c/.h` | PID 控制器实现和参数结构。 |
+| `change.c/.h` | 形态/姿态切换相关控制逻辑。 |
 
 ### services / communicate / abstract / module 层
 
@@ -134,3 +141,9 @@ main.c
 - `alarm.c/.h` 从 `user/abstract` 迁移到 `user/services`。
 - `alarm` 作为电池检测和告警状态服务，底层 GPIO/ADC 访问仍由 HAL 和硬件配置提供。
 - 本阶段不改变告警阈值、告警状态机、任务周期和硬件输出行为。
+
+### 2026-06-29：拆分控制状态刷新模块
+
+- 新增 `control_state.c/.h`，承接 `refreshState()` 和 `printState()`。
+- `control.c` 通过 `control_state.h` 调用状态刷新，不再直接承载状态采集函数实现。
+- 本阶段不改变状态刷新顺序、控制算法、任务周期、PID 参数、输出混控和安全保护逻辑。

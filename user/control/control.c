@@ -1,10 +1,9 @@
 #include "control.h"
-#include "gyro.h"
+#include "control_state.h"
 #include "esc.h"
 #include "motor.h"
 #include "stdlib.h"
 #include <math.h>
-#include "position.h"
 #include "remotedata.h"
 #include "commander.h"
 #include "servo.h"
@@ -246,7 +245,6 @@ MotorCtrl debugEsc;
 setpoint_t target;
 state_t state;
 
-void refreshState(state_t* state);
 static void ResetYawState(void);
 
 void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick);
@@ -380,31 +378,6 @@ void MotorControl(MotorCtrl* ctrl)
     // if (myDelay((uint32_t)MotorControl,100))
     //     LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f  motor:%d,%d",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4,
     //                 ctrl->Motor_Left_Front_PWM,ctrl->Motor_Right_Front_PWM);
-}
-
-void printState(state_t* state)
-{
-    // LOG_INFO("velocity-x:%.2f,y:%.2f,z:%.2f",state->velocity.x,state->velocity.y,state->velocity.z);
-    LOG_INFO("angle-roll:%.2f,pitch:%.2f,yaw:%.2f",state->angle.roll,state->angle.pitch,state->angle.yaw);
-}
-
-/**
- * @brief 刷新状态
- * 
- * @param state 状态结构体
- */
-void refreshState(state_t* state)
-{
-	//陀螺仪
-    gyro_getAngularVelocity(&state->gyro);
-    gyro_getAngle(&state->angle);
-    gyro_getAcc(&state->acc);
-	//光流（内部已做倾斜补偿 + 旋转补偿，仅在新数据到达时执行一次）
-    position_GetVelocity(&state->velocity, &state->angle, &state->gyro);
-    position_GetHeight(&state->height);
-    position_GetPosition(&state->position);
-
-    // printState(state);
 }
 
 /**

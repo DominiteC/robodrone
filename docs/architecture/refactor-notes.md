@@ -538,3 +538,22 @@
 
 - Keil GUI Build/Rebuild 需要 0 error。
 - 烧录后确认电池检测、蜂鸣器、LED 告警和 Alarm 任务表现不变。
+
+## 第三十四阶段：拆分控制状态刷新模块
+
+本阶段开始深入拆分控制层，但只迁移状态采集相关函数，不修改任何控制算法。
+
+- 新增 `user/control/control_state.c/.h`。
+- `refreshState()` 从 `control.c` 迁移到 `control_state.c`，状态刷新顺序保持不变。
+- `printState()` 从 `control.c` 迁移到 `control_state.c`，日志内容保持不变。
+- `control.c` include `control_state.h` 后继续在 `Control_Task()` 中调用 `refreshState(&state)`。
+- Keil 工程 control 分组加入 `control_state.c/.h`。
+- 本阶段不修改任务周期、PID 参数、控制模式判断、输出混控、安全保护和硬件动作。
+- 提交描述：`重构：拆分控制状态刷新模块`。
+
+验证要求：
+
+- Keil GUI Build/Rebuild 需要 0 error。
+- 烧录后确认启动日志正常，遥控数据持续更新。
+- 确认 `Control`、`Receive`、`Send`、`WDog` 任务正常运行。
+- 确认电机、电调、舵机、电杆初始状态无异常。

@@ -1846,6 +1846,16 @@
               <FilePath>..\user\control\control.c</FilePath>
             </File>
             <File>
+              <FileName>control_state.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\control\control_state.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_state.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\control\control_state.h</FilePath>
+            </File>
+            <File>
               <FileName>PIDcontroller.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\control\PIDcontroller.c</FilePath>
