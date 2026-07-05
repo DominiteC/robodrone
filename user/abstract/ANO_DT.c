@@ -159,8 +159,8 @@ void ANO_DT_Data_Exchange(void *param)
 		{
 			f.send_rcdata = 0;
 ANO_DT_Send_RCDataFloat(
-												debugEsc.Esc_Percent_1,        // 1-ESC1 percent
-												debugEsc.Esc_Percent_2,        // 2-ESC2 percent
+												pid_yaw_rate.Output,        // 1-ESC1 percent
+												pid_yaw_rate.Err,        // 2-ESC2 percent
                         debugEsc.Esc_Percent_3,        // 3-ESC3 percent
 												debugEsc.Esc_Percent_4,        // 4-ESC4 percent
                         state.position.y,           // 5-state Y position cm
@@ -168,10 +168,9 @@ ANO_DT_Send_RCDataFloat(
                         debug_target_angle_roll,      // 7-target roll angle
                         state.velocity.x,           // 8-X velocity cm/s
                         state.velocity.y,           // 9-Y velocity cm/s
-                        state.gyro.z,              // 10-gyro Z
-                        pid_yaw_angle.Output,      // 11-yaw angle PID output
-                        getCommanderKeyland()           // 12-yaw angle
-                              // land flag
+                        pid_yaw_angle.Err,              // 10-gyro Z
+                        debug_desired_yaw,           // 11-展开后目标 yaw 角度（连续值）
+                        state.angle.yaw	         // 12-原始 yaw 角度
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	

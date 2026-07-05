@@ -2,6 +2,7 @@
 #include "control_state.h"
 #include "control_output.h"
 #include "control_safety.h"
+#include "gyro.h"            /* é™€èºé›¶åè‡ªæ ¡å‡†æ ‡å¿—: gyro_isGyroZCalibrated() */
 #include "stdlib.h"
 #include <math.h>
 #include "remotedata.h"
@@ -18,24 +19,26 @@
 
 #define limit(x, min, max) ((x)<(min)?(min):((x)>(max)?(max):(x)))
 
-#define ALTHOLD_THRUST_BASE 50.0f
-#define YAW_MAX_RATE	42.0f	// Âú¸Ëyaw½ÇËÙÂÊ deg/s
-#define YAW_DEADBAND	5.0f	// yaw¸ËËÀÇø
+#define ALTHOLD_THRUST_BASE 50.0f //æ‚¬åœä½¿ç”¨çš„åŸºå‡†æ²¹é—¨
+#define YAW_MAX_RATE	42.0f				// æ»¡æ†yawè§’é€Ÿç‡ deg/s
+#define YAW_DEADBAND	5.0f				// yawæ†æ­»åŒº
 
-static float thrustLpf = 35;	/*ÓÍÃÅµÍÍ¨*/
-static float thrustCmd = 0;    /* Êµ¼ÊÓÃÓÚ»ì¿ØÇ°µÄÍÆÁ¦ÃüÁî */
+static float thrustLpf = 35;	/*æ²¹é—¨ä½é€š*/
+static float thrustCmd = 0;    /* å®é™…ç”¨äºæ··æ§å‰çš„æ¨åŠ›å‘½ä»¤ */
 
-static float Desired_yaw;
-static float yawOld = 0.0f;
-static int32_t yawTurnNum = 0;
-static bool yawUnwrapInited = false;
-static bool isAdjustingYaw = false;
+static float Desired_yaw = 0.0f;          /* æœŸæœ› yaw è§’åº¦, è¿ç»­ deg, ä¸åš Â±180Â° åŒ…è£¹ (MiniFly æ–¹å¼) */
+/* é£æ§è‡ªç§¯åˆ†çš„è¿ç»­ yaw è§’åº¦ (åº¦), ç”± state->gyro.z * ANGEL_PID_DT ç´¯åŠ å¾—åˆ°.
+   å®Œå…¨ä¸ä¾èµ– JY901P 9 è½´èåˆçš„ state.angle.yaw. */
+static float yaw_meas_cont = 0.0f;
+/* é‡ç‚¹é˜²æŠ¤: å•æ‹ç§¯åˆ†å¢é‡ > YAW_INTEG_MAX åº¦/æ‹ åˆ™ä¸¢æ‰å½“æ‹ */
+#define YAW_INTEG_MAX_PER_STEP   5.0f
 static float target_angle_pitch = 0.0f;
 static float target_angle_roll = 0.0f;
 float debug_xy_velocity_pid_count = 0.0f;
 float debug_target_angle_pitch = 0.0f;
 float debug_target_angle_roll = 0.0f;
 float debug_target_angle_yaw = 0.0f;
+float debug_desired_yaw = 0.0f;             /* unfolded target yaw (continuous) */
 
 static MotorCtrl control;
 MotorCtrl debugEsc;
@@ -43,6 +46,7 @@ setpoint_t target;
 state_t state;
 
 static void ResetYawState(void);
+static void Yaw_Unwrap_Debug(state_t* state);
 
 void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick);
 void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick);
@@ -56,12 +60,34 @@ static float wrapYawDisplay(float yaw);
 
 static void ResetYawState(void)
 {
-    Desired_yaw = state.angle.yaw;
+    /* é£æ§å†…è‡ªç§¯åˆ†: ä¸Šç”µé»˜è®¤ 0 (ä¸ MiniFly ä¸€è‡´, q0=1,q1=q2=q3=0).
+       ä¸å†ä» JY901P å†…éƒ¨èåˆçš„ state.angle.yaw å–åˆå€¼, é¿å…è¢«ç£å¹²æ‰°å½±å“. */
+    Desired_yaw = 0.0f;
+    yaw_meas_cont = 0.0f;
     debug_target_angle_yaw = wrapYawDisplay(Desired_yaw);
-    yawOld = state.angle.yaw;
-    yawTurnNum = 0;
-    yawUnwrapInited = false;
-    isAdjustingYaw = false;
+}
+
+/* Ground yaw unfold debug - independent from flight control, tracks yaw continuously */
+/* debug ç”¨: ä»è·Ÿè¸ª JY901P å†…éƒ¨ state.angle.yaw çš„å±•å¼€å€¼, çº¯æ˜¾ç¤ºç”¨, ä¸è¿›æ§åˆ¶ */
+static float debug_yawOld = 0.0f;
+static int32_t debug_yawTurnNum = 0;
+static bool debug_yawUnwrapInited = false;
+
+static void Yaw_Unwrap_Debug(state_t* state)
+{
+    if (!debug_yawUnwrapInited)
+    {
+        debug_yawOld = state->angle.yaw;
+        debug_yawUnwrapInited = true;
+    }
+    float diff = state->angle.yaw - debug_yawOld;
+    if (diff > 180.0f)
+        debug_yawTurnNum--;
+    else if (diff < -180.0f)
+        debug_yawTurnNum++;
+    debug_yawOld = state->angle.yaw;
+
+    debug_desired_yaw = state->angle.yaw + debug_yawTurnNum * 360.0f;
 }
 
 void ResetFlightControlPIDs(void)
@@ -88,7 +114,7 @@ void ResetFlightControlPIDs(void)
 
 void Control_Task(void *param)
 {
-    /* ´ÓEEPROM»Ö¸´µôµçÇ°µÄ×ËÌ¬/¶æ»úÄ£Ê½ */
+    /* ä»EEPROMæ¢å¤æ‰ç”µå‰çš„å§¿æ€/èˆµæœºæ¨¡å¼ */
     uint8_t savedAtti = MODE_AIRPLANE;
     uint8_t savedServo = SERVO_AIRPLANE;
     WatchdogGuard_EnterLongAction(3000);
@@ -96,25 +122,25 @@ void Control_Task(void *param)
     {
         initCommanderAttitudeMode((AttitudeMode)savedAtti);
         initServoMode((ServoMode)savedServo);
-        LOG_INFO("´ÓEEPROM»Ö¸´×ËÌ¬:%d ¶æ»ú:%d", savedAtti, savedServo);
+        LOG_INFO("ä»EEPROMæ¢å¤å§¿æ€:%d èˆµæœº:%d", savedAtti, savedServo);
     }
     else
     {
         initCommanderAttitudeMode(MODE_AIRPLANE);
         initServoMode(SERVO_AIRPLANE);
         CommanderPersist_SaveModes((uint8_t)MODE_AIRPLANE, (uint8_t)SERVO_AIRPLANE);
-        LOG_WARN("EEPROMÄ£Ê½ÎŞĞ§,»ØÍËÄ¬ÈÏ AIR/AIR ²¢ÖØĞ´");
+        LOG_WARN("EEPROMæ¨¡å¼æ— æ•ˆ,å›é€€é»˜è®¤ AIR/AIR å¹¶é‡å†™");
     }
     WatchdogGuard_ExitLongAction();
 
     TickType_t lastWakeTime = xTaskGetTickCount();
     while(1)
     {
-        // ¶ÁÈ¡ÍÓÂİÒÇºÍ¹âÁ÷Êı¾İ
+        // è¯»å–é™€èºä»ªå’Œå…‰æµæ•°æ®
         WatchdogGuard_ControlHeartbeat();
         refreshState(&state);
         commanderGetSetpoint(&target,&state);
-        // ¸ù¾İÄ£Ê½½øĞĞ¿ØÖÆ
+        // æ ¹æ®æ¨¡å¼è¿›è¡Œæ§åˆ¶
         if (getCommanderAttitudeMode() == MODE_AIRPLANE && getServoMode() == SERVO_AIRPLANE)
         {
             Flight_Update(&control,&target,&state);
@@ -138,29 +164,29 @@ void Control_Task(void *param)
         safeCheck(&control,&state);
         debugEsc = control;
         MotorControl(&control);
-        vTaskDelayUntil(&lastWakeTime, 1);		/*1msÖÜÆÚÑÓÊ±*/
+        vTaskDelayUntil(&lastWakeTime, 1);		/*1mså‘¨æœŸå»¶æ—¶*/
     }
 }
 
 /**
- * @brief ·ÉĞĞ¿ØÖÆ
- * @note ·É»úËÄÖáµç»úÊ¾ÒâÍ¼
+ * @brief é£è¡Œæ§åˆ¶
+ * @note é£æœºå››è½´ç”µæœºç¤ºæ„å›¾
  * 
- * @param ctrl µç¼ÆÊä³ö½á¹¹Ìå
- * @param target Ä¿±êÎ»ÖÃ½á¹¹Ìå
- * @param state µ±Ç°×´Ì¬½á¹¹Ìå
+ * @param ctrl ç”µè®¡è¾“å‡ºç»“æ„ä½“
+ * @param target ç›®æ ‡ä½ç½®ç»“æ„ä½“
+ * @param state å½“å‰çŠ¶æ€ç»“æ„ä½“
  * 
  * @note
- *                 »úÍ·(X+)
- *          (Ë³)M3    ¡ü    M1(Äæ)
+ *                 æœºå¤´(X+)
+ *          (é¡º)M2    â†‘    M1(é€†)
  *                \   |   /
  *                 \  |  /
  *                  \ | /
- *            ¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª+¡ª¡ª¡ª¡ª¡ª¡ª¡ª¡ª>Y+
+ *            â€”â€”â€”â€”â€”â€”â€”â€”+â€”â€”â€”â€”â€”â€”â€”â€”>Y+
  *                  / | \
  *                 /  |  \
  *                /   |   \
- *           (Äæ)M2   |    M4(Ë³)
+ *           (é€†)M3   |    M4(é¡º)
  * 
  */
 void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
@@ -187,23 +213,24 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     {
         ResetFlightControlPIDs();
         (void)Height_Control(target,state,tick);
+        Yaw_Unwrap_Debug(state);  /* track unwrapped yaw on ground */
     }
 
 
     // LOG_INFO("thr:%.2f,roll:%.2f,pit:%.2f,yaw:%.2f",throttle,pid_roll_rate.Output,pid_pitch_rate.Output,pid_yaw_rate.Output);
-    // ÉèÖÃµçµ÷Êä³ö
-    if (!state->isRCLocked && throttle > 5)
+    // è®¾ç½®ç”µè°ƒè¾“å‡º
+    if (!state->isRCLocked && throttle > 2)
     {
-			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output;// - pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output;// - pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output;// + pid_yaw_rate.Output;
-			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output;// + pid_yaw_rate.Output;
+//			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3é¡º(- pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
 
-			 // Ìí¼Ó×îĞ¡ÓÍÃÅÏŞÖÆ£¬È·±£µç»ú²»»áÍ£×ª
-			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 10, 24);
-			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 10, 24);
-			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 10, 24);
-			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 10, 24);
+//			 // æ·»åŠ æœ€å°æ²¹é—¨é™åˆ¶ï¼Œç¡®ä¿ç”µæœºä¸ä¼šåœè½¬
+//			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 80);
+//			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 0, 80);
+//			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 0, 80);
+//			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 0, 80);
 //				ctrl->Esc_Percent_2 = 10;
 
         // LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4);
@@ -224,15 +251,15 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 }
 
 /**
- * @brief ºá¹ö¸©Ñö¿ØÖÆ
+ * @brief æ¨ªæ»šä¿¯ä»°æ§åˆ¶
  * 
- * @param target Ä¿±ê×´Ì¬
- * @param state µ±Ç°×´Ì¬
+ * @param target ç›®æ ‡çŠ¶æ€
+ * @param state å½“å‰çŠ¶æ€
  * 
- * @note target_v Ä¿±êËÙ¶È£¬µ¥Î»cm/s
- * @note measure_v ²âÁ¿ËÙ¶È£¬µ¥Î»cm/s
- * @note measure_a ²âÁ¿½Ç¶È£¬µ¥Î»¶È
- * @note measure_g ²âÁ¿½ÇËÙ¶È£¬µ¥Î»¶È/s
+ * @note target_v ç›®æ ‡é€Ÿåº¦ï¼Œå•ä½cm/s
+ * @note measure_v æµ‹é‡é€Ÿåº¦ï¼Œå•ä½cm/s
+ * @note measure_a æµ‹é‡è§’åº¦ï¼Œå•ä½åº¦
+ * @note measure_g æµ‹é‡è§’é€Ÿåº¦ï¼Œå•ä½åº¦/s
  */
 void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
 {
@@ -240,10 +267,10 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
     {
         if (getCommanderCtrlMode() == MODE_THREEHOLD)
         {
-            // ¶¨µãÄ£Ê½£ºÎ»ÖÃ»· + ËÙ¶È»·¼¶Áª
+            // å®šç‚¹æ¨¡å¼ï¼šä½ç½®ç¯ + é€Ÿåº¦ç¯çº§è”
             float vel_x_target, vel_y_target;
 
-            // Î»ÖÃ»· (modeAbsÊ±ÉúĞ§£¬½«Î»ÖÃÎó²î×ªÎªËÙ¶ÈÖ¸Áî)
+            // ä½ç½®ç¯ (modeAbsæ—¶ç”Ÿæ•ˆï¼Œå°†ä½ç½®è¯¯å·®è½¬ä¸ºé€Ÿåº¦æŒ‡ä»¤)
             if (target->mode_x == modeAbs)
             {
                 vel_x_target = 0.1f * PIDCalculate(&pid_x_position, state->position.x, target->pos.x);
@@ -264,7 +291,7 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
                 vel_y_target = target->vel.y;
             }
 
-            // ËÙ¶È»·
+            // é€Ÿåº¦ç¯
             target_angle_pitch = -PIDCalculate(&pid_x_velocity, state->velocity.x, vel_x_target);
             target_angle_roll  = -PIDCalculate(&pid_y_velocity, state->velocity.y, vel_y_target);
             debug_xy_velocity_pid_count += 1.0f;
@@ -285,7 +312,7 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
     if (RATE_DO_EXECUTE(ANGEL_PID_RATE,tick))
     {
-        // ½Ç¶È»·
+        // è§’åº¦ç¯
         
         PIDCalculate(&pid_pitch_angle, state->angle.pitch, target_angle_pitch);
         PIDCalculate(&pid_roll_angle, state->angle.roll, target_angle_roll);
@@ -296,7 +323,7 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
     if (RATE_DO_EXECUTE(RATE_PID_RATE,tick))
     {
-        // ½ÇËÙ¶È»·
+        // è§’é€Ÿåº¦ç¯
         
         PIDCalculate(&pid_pitch_rate, state->gyro.y, pid_pitch_angle.Output);
         PIDCalculate(&pid_roll_rate, state->gyro.x, pid_roll_angle.Output);
@@ -307,63 +334,50 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
 }
 
 /**
- * @brief º½Ïò¿ØÖÆ
+ * @brief èˆªå‘æ§åˆ¶
  * 
- * @param target Ä¿±ê×´Ì¬
- * @param state µ±Ç°×´Ì¬
+ * @param target ç›®æ ‡çŠ¶æ€
+ * @param state å½“å‰çŠ¶æ€
  * 
- * @note target_a Ä¿±êÆ«º½½Ç£¬µ¥Î»¶È
- * @note measure_a ²âÁ¿½Ç¶È£¬µ¥Î»¶È
- * @note measure_g ²âÁ¿½ÇËÙ¶È£¬µ¥Î»¶È/s
+ * @note target_a ç›®æ ‡åèˆªè§’ï¼Œå•ä½åº¦
+ * @note measure_a æµ‹é‡è§’åº¦ï¼Œå•ä½åº¦
+ * @note measure_g æµ‹é‡è§’é€Ÿåº¦ï¼Œå•ä½åº¦/s
  */
 void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 {
+    /* ä¸Šç”µ 1.0s é™€èºé›¶åæ ¡å‡†æœªé€šè¿‡: yaw æ§åˆ¶å™¨ç›´æ¥ä¸å·¥ä½œ, ä¸äº§ç”Ÿä»»ä½•å·®åˆ†.
+       ä¸ MiniFly sensorsAreCalibrated() ç­‰ä»·çš„ç­–ç•¥: æœªæ ¡å‡†ä¸è¿›å…¥æ§åˆ¶. */
+    if (gyro_isGyroZCalibrated() == 0)
+    {
+        return;
+    }
+
     if (RATE_DO_EXECUTE(ANGEL_PID_RATE,tick))
     {
-        // ½Ç¶È²øÈÆÕ¹¿ª
-        if (!yawUnwrapInited)
+        /* é£æ§ç«¯ç”¨ state->gyro.z è‡ªç§¯åˆ†å‡ºè¿ç»­ yaw è§’åº¦ (åº¦).
+           ä¸å†ç”¨ JY901P 9 è½´èåˆçš„ state.angle.yaw, å®Œå…¨æ‘†è„±ç£å¹²æ‰°ä¸æ¨¡å—åç½®. */
+        float yaw_step = state->gyro.z * ANGEL_PID_DT;
+        if (fabsf(yaw_step) < YAW_INTEG_MAX_PER_STEP)
         {
-            yawOld = state->angle.yaw;
-            Desired_yaw = state->angle.yaw;
-            yawUnwrapInited = true;
+            yaw_meas_cont += yaw_step;
         }
-        float diff = state->angle.yaw - yawOld;
-        if (diff > 180.0f)
-            {yawTurnNum--;LOG_INFO("turnNum: %d",yawTurnNum);}
-        else if (diff < -180.0f)
-            {yawTurnNum++;LOG_INFO("turnNum: %d",yawTurnNum);}
-        yawOld = state->angle.yaw;
+        /* é‡ç‚¹ä¿æŠ¤: å•æ‹å¢é‡è¿‡å¤§åˆ™ä¸¢æ‰, é¿å… sensor è·³å˜æ±¡æŸ“ç§¯åˆ† */
 
-        float yaw_meas_cont = state->angle.yaw + yawTurnNum * 360.0f;
         float stick = -target->angle.yaw;
 
+        /* MiniFly éšå¼é”è§’: æ†å›ä¸­ â†’ è§’é€Ÿåº¦=0 â†’ Desired_yaw ä¸å†å˜ â†’ è§’åº¦ç¯
+           è‡ªç„¶æŠŠ yaw_meas_cont ç»´æŒåœ¨å½“å‰å€¼. ä¸å†éœ€è¦ isAdjustingYaw çŠ¶æ€æœº. */
         if (fabsf(stick) > YAW_DEADBAND)
         {
-            // Ò¡¸ËÆ«ÀëÖĞĞÄ£º°´±ÈÀıµ÷ÕûÄ¿±ê½Ç¶È
+            /* æ†å: æŒ‰æ¯”ä¾‹ç´¯åŠ ç›®æ ‡è§’åº¦ (deg) = æœŸæœ›è§’é€Ÿåº¦ (deg/s) * dt.
+               æ•ˆæœä¸ MiniFly attitudeDesired.yaw += setpoint->yaw / ANGEL_PID_RATE ç›¸åŒ. */
             Desired_yaw += (stick / 100.0f) * YAW_MAX_RATE * ANGEL_PID_DT;
-            isAdjustingYaw = true;
         }
-        else
-        {
-            // Ò¡¸Ë»ØÖĞ£ºÎ»ÖÃ±£³Ö
-            if (isAdjustingYaw)
-            {
-                // ¸Õ»ØÖĞ ¡ú Ëø¶¨µ±Ç°½Ç¶È
-                Desired_yaw = yaw_meas_cont;
-                PID_ClearIntegral(&pid_yaw_angle);
-                PID_ClearIntegral(&pid_yaw_rate);
-                pid_yaw_angle.Output = 0;
-                pid_yaw_angle.Last_Output = 0;
-                pid_yaw_rate.Output = 0;
-                pid_yaw_rate.Last_Output = 0;
-                isAdjustingYaw = false;
-            }
-            // ·ñÔò Desired_yaw ²»±ä£¬¼ÌĞøÎ»ÖÃ±£³Ö
-        }
+        /* else: æ†å›ä¸­, è§’é€Ÿåº¦æŒ‡ä»¤=0, Desired_yaw ä¸å˜ â†’ é”è§’, å•¥éƒ½ä¸åš */
 
         // LOG_DEBUG("desire-yaw:%.2f",Desired_yaw);
-        // ½Ç¶È»·
-        
+        // è§’åº¦ç¯
+
         PIDCalculate(&pid_yaw_angle, yaw_meas_cont, Desired_yaw);
         debug_target_angle_yaw = wrapYawDisplay(Desired_yaw);
         if (fabsf(pid_yaw_angle.Err) < pid_yaw_angle.DeadBand)
@@ -371,29 +385,16 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
             pid_yaw_angle.Output = 0;
             pid_yaw_angle.Last_Output = 0;
         }
-        
+
 
         // if (myDelay((uint32_t)Yaw_Control,100))
-        //     LOG_DEBUG("state-yaw:%.2f,set-yaw:%.2f,output:%.2f",state->angle.yaw,Desired_yaw,pid_yaw_angle.Output);
+        //     LOG_DEBUG("state-yaw:%.2f,set-yaw:%.2f,output:%.2f",yaw_meas_cont,Desired_yaw,pid_yaw_angle.Output);
     }
 
     if (RATE_DO_EXECUTE(RATE_PID_RATE,tick))
     {
-        // float error = fabs(target->angle.yaw/10 - state->gyro.z);
-        // if (error < 5.0f)
-        // {
-        //     pid_yaw_rate.Kp = 0.1f;
-        // }
-        // // else if (error < 15.0f)
-        // // {
-        // //     pid_yaw_rate.Kp = 0.3f;
-        // // }
-        // else
-        // {
-        //     pid_yaw_rate.Kp = 1.0f;
-        // }
-        // ½ÇËÙ¶È»·
-        
+        // è§’é€Ÿåº¦ç¯
+
 //        PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);
         PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);//target->angle.yaw/10
         if (fabsf(pid_yaw_rate.Err) < pid_yaw_rate.DeadBand)
@@ -401,7 +402,7 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
             pid_yaw_rate.Output = 0;
             pid_yaw_rate.Last_Output = 0;
         }
-        
+
 
         // LOG_DEBUG("state-yaw-rate:%.2f,set-yaw-rate:%.2f,output:%.2f",state->gyro.z,pid_yaw_angle.Output,pid_yaw_rate.Output);
     }
@@ -410,12 +411,12 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
 //void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 //{
-//    static float yaw_target = 0.0f;   // ÆÚÍû yaw ½Ç£¨deg£¬Á¬Ğø£©
+//    static float yaw_target = 0.0f;   // æœŸæœ› yaw è§’ï¼ˆdegï¼Œè¿ç»­ï¼‰
 //    static float yaw_meas_cont = 0.0f;
 //    static float last_yaw = 0.0f;
 //    static int32_t turnNum = 0;
 
-//    /* ---------- yaw ½Ç¶ÈÕ¹¿ª ---------- */
+//    /* ---------- yaw è§’åº¦å±•å¼€ ---------- */
 //    float yaw_now = state->angle.yaw;
 
 //    if (yaw_now - last_yaw > 300.0f)
@@ -426,34 +427,34 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 //    last_yaw = yaw_now;
 //    yaw_meas_cont = yaw_now + 360.0f * turnNum;
 
-//    /* ---------- ½Ç¶È»·£¨ANGEL_PID_RATE£© ---------- */
+//    /* ---------- è§’åº¦ç¯ï¼ˆANGEL_PID_RATEï¼‰ ---------- */
 //    if (RATE_DO_EXECUTE(ANGEL_PID_RATE, tick))
 //    {
-//        /* RC yaw ÊäÈë ¡ú ÆÚÍû yaw ½ÇËÙ¶È£¨deg/s£© */
+//        /* RC yaw è¾“å…¥ â†’ æœŸæœ› yaw è§’é€Ÿåº¦ï¼ˆdeg/sï¼‰ */
 //        float yaw_rate_cmd = target->angle.yaw;  
-//        // ½¨Òé£ºtarget->angle.yaw ¡Ê [-150, 150] deg/s
+//        // å»ºè®®ï¼štarget->angle.yaw âˆˆ [-150, 150] deg/s
 
-//        /* »ı·ÖµÃµ½ÆÚÍû yaw ½Ç */
+//        /* ç§¯åˆ†å¾—åˆ°æœŸæœ› yaw è§’ */
 //        yaw_target += yaw_rate_cmd * ANGEL_PID_DT;
 
 //        PIDCalculate(&pid_yaw_angle, yaw_meas_cont, yaw_target);
 //    }
 
-//    /* ---------- ½ÇËÙ¶È»·£¨RATE_PID_RATE£© ---------- */
+//    /* ---------- è§’é€Ÿåº¦ç¯ï¼ˆRATE_PID_RATEï¼‰ ---------- */
 //    if (RATE_DO_EXECUTE(RATE_PID_RATE, tick))
 //    {
 //        PIDCalculate(&pid_yaw_rate,
-//                     state->gyro.z,              // Êµ¼Ê yaw ½ÇËÙ¶È£¨deg/s£©
-//                     pid_yaw_angle.Output);      // ½Ç¶È»·Êä³ö×÷ÎªÆÚÍû½ÇËÙ¶È
+//                     state->gyro.z,              // å®é™… yaw è§’é€Ÿåº¦ï¼ˆdeg/sï¼‰
+//                     pid_yaw_angle.Output);      // è§’åº¦ç¯è¾“å‡ºä½œä¸ºæœŸæœ›è§’é€Ÿåº¦
 //    }
 //}
 
 
 /**
- * @brief ¸ß¶È¿ØÖÆ
- * @param target_height Ä¿±ê¸ß¶È£¬µ¥Î»cm
- * @param measure_height ²âÁ¿¸ß¶È£¬µ¥Î»cm
- * @param measure_vz ²âÁ¿´¹Ö±ËÙ¶È£¬µ¥Î»cm/s
+ * @brief é«˜åº¦æ§åˆ¶
+ * @param target_height ç›®æ ‡é«˜åº¦ï¼Œå•ä½cm
+ * @param measure_height æµ‹é‡é«˜åº¦ï¼Œå•ä½cm
+ * @param measure_vz æµ‹é‡å‚ç›´é€Ÿåº¦ï¼Œå•ä½cm/s
  */
 float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
 {
@@ -466,20 +467,20 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
 
     #define TAKEOFF_START_THRUST  20.0f
     #define LAND_END_THRUST       45.0f
-    #define TAKEOFF_RAMP_CYCLE    500     /* 2Ãë @250Hz */
-    #define LAND_RAMP_CYCLE       1250    /* 5Ãë @250Hz */
+    #define TAKEOFF_RAMP_CYCLE    500     /* 2ç§’ @250Hz */
+    #define LAND_RAMP_CYCLE       1250    /* 5ç§’ @250Hz */
 
-    //ÊÖ¶¯Ä£Ê½Ö±½ÓÓ³ÉäÓÍÃÅ£¬¶¨¸ßÄ£Ê½²ÅÊ¹ÓÃPID¿ØÖÆ¸ß¶È
+    //æ‰‹åŠ¨æ¨¡å¼ç›´æ¥æ˜ å°„æ²¹é—¨ï¼Œå®šé«˜æ¨¡å¼æ‰ä½¿ç”¨PIDæ§åˆ¶é«˜åº¦
     if (getCommanderCtrlMode() == MODE_MANUAL)
-        return limit(target->thrust, 0, 70);
+        return limit(target->thrust, 0, 100);
 
-    /* Æğ·É: ¼ì²â keyFlight 0->1 Ìø±ä£¬Æô¶¯Ğ±ÆÂ */
+    /* èµ·é£: æ£€æµ‹ keyFlight 0->1 è·³å˜ï¼Œå¯åŠ¨æ–œå¡ */
     if (getCommanderKeyFlight() && !lastKeyFlight)
     {
         baseThrust = TAKEOFF_START_THRUST;
         rampCnt = 0;
     }
-    /* ½µÂä: ¼ì²â keyLand 0->1 Ìø±ä£¬Æô¶¯Ğ±ÆÂ */
+    /* é™è½: æ£€æµ‹ keyLand 0->1 è·³å˜ï¼Œå¯åŠ¨æ–œå¡ */
     else if (getCommanderKeyland() && !lastKeyLand)
     {
         rampCnt = 0;
@@ -488,7 +489,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
     lastKeyFlight = getCommanderKeyFlight();
     lastKeyLand = getCommanderKeyland();
 
-    // Í£»úÊ±ÇåÁã£¬·ÀÖ¹Ö®Ç°µÄ»ı·Öµ¼ÖÂÓÍÃÅÊıÖµ²»Õı³£
+    // åœæœºæ—¶æ¸…é›¶ï¼Œé˜²æ­¢ä¹‹å‰çš„ç§¯åˆ†å¯¼è‡´æ²¹é—¨æ•°å€¼ä¸æ­£å¸¸
     if (!getCommanderKeyFlight() && !getCommanderKeyland())
     {
         thrustLpf = 0;
@@ -500,26 +501,26 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
         return 0;
     }
 
-    // PID¿ØÖÆ²¿·Ö
+    // PIDæ§åˆ¶éƒ¨åˆ†
     if (RATE_DO_EXECUTE(POSITION_PID_RATE,tick))
     {
         if (target->mode_z == modeVelocity || target->mode_z == modeDisable)
         {
-            /* ËÙ¶ÈÄ£Ê½: Î»ÖÃ»·ÅÔÂ·£¬IÏîÇåÁã£¬·ÀÖ¹»ı·Ö·ç³µ */
+            /* é€Ÿåº¦æ¨¡å¼: ä½ç½®ç¯æ—è·¯ï¼ŒIé¡¹æ¸…é›¶ï¼Œé˜²æ­¢ç§¯åˆ†é£è½¦ */
             pid_height_position.Output = 0;
             pid_height_position.Iout = 0;
             pid_height_position.ITerm = 0;
         }
         else if (target->mode_z == modeAbs)
         {
-            /* Î»ÖÃ±£³Ö: Î»ÖÃ»·Õı³£¼¶Áª */
+            /* ä½ç½®ä¿æŒ: ä½ç½®ç¯æ­£å¸¸çº§è” */
             PIDCalculate(&pid_height_position, state->height, target->height);
         }
     }
 
     if (RATE_DO_EXECUTE(VELOCITY_PID_RATE,tick))
     {
-        /* Æğ·ÉĞ±ÆÂ: »ù´¡ÓÍÃÅ´Ó 20% Öğ²½ÅÀÉıµ½ 44% */
+        /* èµ·é£æ–œå¡: åŸºç¡€æ²¹é—¨ä» 20% é€æ­¥çˆ¬å‡åˆ° 44% */
         if (getCommanderKeyFlight() && baseThrust < ALTHOLD_THRUST_BASE)
         {
             if (++rampCnt <= TAKEOFF_RAMP_CYCLE)
@@ -528,7 +529,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
             else
                 baseThrust = ALTHOLD_THRUST_BASE;
         }
-        /* ½µÂäĞ±ÆÂ: »ù´¡ÓÍÃÅ´Ó 44% Öğ²½½µµ½ 35% */
+        /* é™è½æ–œå¡: åŸºç¡€æ²¹é—¨ä» 44% é€æ­¥é™åˆ° 35% */
         else if (getCommanderKeyland() && baseThrust > LAND_END_THRUST)
         {
             if (++rampCnt <= LAND_RAMP_CYCLE)
@@ -538,18 +539,18 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
                 baseThrust = LAND_END_THRUST;
         }
 
-        // Î»ÖÃ»·Êä³öÏŞ·ù£¬·ÀÖ¹Òì³£Ê±ĞŞÕıÁ¿¹ı´ó
+        // ä½ç½®ç¯è¾“å‡ºé™å¹…ï¼Œé˜²æ­¢å¼‚å¸¸æ—¶ä¿®æ­£é‡è¿‡å¤§
         float posCorr = (target->mode_z == modeAbs) ?
             fmaxf(-30.f, fminf(30.f, pid_height_position.Output)) : 0.f;
 
-        // ËÙ¶È»·: Ä¿±ê = Î»ÖÃ»·ĞŞÕı + Ò¡¸ËËÙ¶ÈÇ°À¡
+        // é€Ÿåº¦ç¯: ç›®æ ‡ = ä½ç½®ç¯ä¿®æ­£ + æ‘‡æ†é€Ÿåº¦å‰é¦ˆ
         PIDCalculate(&pid_z_velocity, state->velocity.z, posCorr + target->vel.z);
 
         thrustRaw = baseThrust + pid_z_velocity.Output;
         thrustLpf += (thrustRaw - thrustLpf) * 0.003f;
     }
 
-    // ¶¨¸ß·ÉĞĞÊ±£¬Èç¹û´¹Ö±¼ÓËÙ¶ÈºÜĞ¡£¬ËµÃ÷×´Ì¬±È½ÏÎÈ¶¨£¬¿ÉÒÔ¿¼ÂÇ¸üĞÂ»ù´¡ÓÍÃÅÖµ
+    // å®šé«˜é£è¡Œæ—¶ï¼Œå¦‚æœå‚ç›´åŠ é€Ÿåº¦å¾ˆå°ï¼Œè¯´æ˜çŠ¶æ€æ¯”è¾ƒç¨³å®šï¼Œå¯ä»¥è€ƒè™‘æ›´æ–°åŸºç¡€æ²¹é—¨å€¼
 	if(getCommanderKeyFlight() || getCommanderKeyland())
 	{
 		if(fabs(state->acc.z) < 0.035f)
@@ -558,19 +559,19 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
 			if(altholdCount > 1000)
 			{
 				altholdCount = 0;
-				// if(fabs(configParam.thrustBase - thrustLpf) > 1.f)	/*¸üĞÂ»ù´¡ÓÍÃÅÖµ*/
+				// if(fabs(configParam.thrustBase - thrustLpf) > 1.f)	/*æ›´æ–°åŸºç¡€æ²¹é—¨å€¼*/
 				// 	configParam.thrustBase = thrustLpf;
 			}
 		}else
 		{
 			altholdCount = 0;
 		}
-	}else if(getCommanderKeyland() == false)	/*½µÂäÍê³É£¬ÓÍÃÅÇåÁã*/
+	}else if(getCommanderKeyland() == false)	/*é™è½å®Œæˆï¼Œæ²¹é—¨æ¸…é›¶*/
 	{
 		return 0;
 	}
 
-    return limit(thrustRaw, 20, 70);  // ÏŞÖÆÓÍÃÅÉÏÏŞÔÚ70%
+    return limit(thrustRaw, 20, 70);  // é™åˆ¶æ²¹é—¨ä¸Šé™åœ¨70%
 }
 
 float getAltholdThrust(void)
@@ -594,11 +595,11 @@ static float wrapYawDisplay(float yaw)
 }
 
 /**
- * @brief Â½ĞĞÄ£Ê½¿ØÖÆ
+ * @brief é™†è¡Œæ¨¡å¼æ§åˆ¶
  * 
- * @param ctrl µç¼ÆÊä³ö½á¹¹Ìå
- * @param target Ä¿±êÎ»ÖÃ½á¹¹Ìå
- * @param state µ±Ç°×´Ì¬½á¹¹Ìå
+ * @param ctrl ç”µè®¡è¾“å‡ºç»“æ„ä½“
+ * @param target ç›®æ ‡ä½ç½®ç»“æ„ä½“
+ * @param state å½“å‰çŠ¶æ€ç»“æ„ä½“
  */
 void Walk_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 {

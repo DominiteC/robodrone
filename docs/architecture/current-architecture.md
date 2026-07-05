@@ -4,7 +4,7 @@
 
 本文档记录当前工程已经落地的分层架构、关键文件职责和后续变更追加位置。
 
-后续每次做架构相关重构时，都需要在本文档的“架构变更记录”中追加一条记录，说明本次改了什么、影响哪些文件、是否改变运行行为。详细执行过程仍记录在 `docs/architecture/refactor-notes.md`，长期目标仍参考 `docs/architecture/project-refactor-roadmap.md`。
+后续每次做架构相关重构时，都需要在本文档的“架构变更记录”中追加一条记录，说明本次改了什么、影响哪些文件、是否改变运行行为。详细执行过程仍记录在 `docs/architecture/refactor-notes.md`，长期目标仍参考 `docs/architecture/project-refactor-roadmap.md`，待解决的架构问题参考 `docs/architecture/known-issues.md`。
 
 ## 当前启动链路
 
@@ -178,3 +178,21 @@ main.c
 - 新增 `control_rates.h`，承接控制任务频率、主循环周期和 `RATE_DO_EXECUTE()`。
 - `control.h` 改为 include `control_rates.h`，继续对外提供原有控制周期宏。
 - 本阶段不修改任何周期数值、任务周期、控制算法和硬件动作。
+
+### 2026-06-29：新增已知问题清单文档
+
+- 新增 `docs/architecture/known-issues.md`，归档已摸清但尚未解决的架构问题。
+- 文档按飞控端（F-1~F-9）、遥控器端（R-1~R-6）、结构性观察（S-1~S-4）三类整理。
+- 每条问题包含影响、证据、建议方向、优先级四个字段。
+- 本文与 `current-architecture.md` / `project-refactor-roadmap.md` / `refactor-notes.md` 互补：本文档记已落地，后两份分别记长期目标与已完成重构。
+- 本阶段仅新增与引用更新，不改变任何运行逻辑。
+
+### 2026-07-14：yaw 控制改用飞控自积分 + 陀螺零偏自校准
+
+- 取消对 JY901P 内部 9 轴融合输出 `state.angle.yaw` 的闭环依赖；飞控端用 `state->gyro.z` 自积分得到连续 yaw 角度 `yaw_meas_cont` 作为角度环测量值。
+- 新增陀螺零偏自校准 `gyro_calibrateGyroZOffset()`：上电后 1.0 秒采 200 帧（`vTaskDelay(5ms)`），三轴方差都 < 4.0 (°/s)² 时接受均值当零偏；`gyro_getAngularVelocity()` 在 `state->gyro.z` 上自动扣减 `gyro_z_offset`。
+- 移除 `isAdjustingYaw` 显式锁角状态机、`yawOld / yawTurnNum / yawUnwrapInited` 这套 ±180° 展开状态（自积分的 yaw 是连续角，无需展开）。
+- `Yaw_Control` 入口增加 `gyro_isGyroZCalibrated() == 0` 早返：未校准时 yaw 控制器不工作，避免在 `state->gyro.z` 零偏未扣除时把误差灌进积分。
+- 杆回中改为 MiniFly 隐式锁角：角速度指令=0 → `Desired_yaw` 不变 → 角度环自然把 `yaw_meas_cont` 维持在当前值；不再有 "回中→锁 Desired_yaw→清 PID 积分" 流程。
+- `state.angle.yaw` 仍由 JY901P 提供并由 `ANO_DT` 走地面站显示，但不再被 `control.c` 读入控制。
+- PID 参数、混控符号、ESC 输出限幅、控制频率、JY901P 模块配置保持不变。

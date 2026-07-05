@@ -14,13 +14,13 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define TAKEOFF_HEIGHT		100.f
+#define TAKEOFF_HEIGHT		120.f
 #define TAKEOFF_MIN_SPEED	5.f
 #define TAKEOFF_SLOW_ZONE	30.f
 #define LAND_MIN_SPEED		4.f
 #define LAND_SLOW_HEIGHT	35.f
-#define TAKEOFF_SPEED		10.f	// 起飞爬升速度 cm/s
-#define LAND_SPEED			6.f	// 降落下降速度 cm/s
+#define TAKEOFF_SPEED		15.f	// 起飞爬升速度 cm/s
+#define LAND_SPEED			15.f	// 降落下降速度 cm/s
 #define COMMANDER_DT		0.001f
 
 /* 速度优先定高参数 */
@@ -249,7 +249,12 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 	state->isRCLocked = (isRCLocked || safetyLatched);
 	if (commander.attitudeMode == MODE_WALK || commander.attitudeMode == MODE_WALK_45)
 	{
-		setpoint->thrust = data.throttle;
+		float thr = data.throttle;
+		// 手动模式油门范围 0~100，映射到以 50 为中心
+		if (commander.ctrlMode == MODE_MANUAL)
+        	thr = thr * 0.5f + 50.0f;    // 0→50, 100→100
+		
+		setpoint->thrust = thr;
 		setpoint->vel.x = data.angle.pitch;
 		setpoint->vel.y = data.angle.roll;
 		setpoint->vel.z = 0;

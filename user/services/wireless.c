@@ -1,7 +1,16 @@
-﻿/*
- * wireless.c
- * 负责无线链路的收发模式切换、链路恢复、接收回调和接收任务。
- * 本文件属于 services 层，底层 nRF24L01P 芯片访问由 module/RF 驱动负责。
+/**
+ * wireless.c — 飞控端无线通信（固定 PRX + ACK Payload 模式）
+ *
+ * 架构说明：
+ *   飞控永远作为 PRX（Primary Receiver），固定 RX 模式。
+ *   遥控器作为 PTX 主动发起所有通信。
+ *   飞控收到控制数据后，通过 Enhanced ShockBurst 的 ACK Payload
+ *   自动将遥测数据带回遥控器，无需飞控切换 TX 模式。
+ *
+ * 参考：
+ *   - Crazyflie nrf24link.c (固定 PRX, ACK payload 回传)
+ *   - TMRh20 RF24 GettingStarted_CallResponse
+ *   - Nordic nRF24L01+ Enhanced ShockBurst ACK Payload
  */
 #include "wireless.h"
 #include "C_code_Log.h"
@@ -14,28 +23,31 @@
 Wireless_ReceiveCallback wireless_callback = NULL;
 
 QueueHandle_t wireless_semaph;
-static uint8_t wireless_tx_fail_streak = 0;
-#define WIRELESS_TX_WAIT_MS 35U
+static uint8_t wireless_rx_idle_streak = 0;
+#define WIRELESS_RX_IDLE_RECOVER 20   /* 20 × 50ms = 1s 无接收 → 链路恢复 */
+
+/* ──── 内部函数 ──── */
 
 static void Wireless_RecoverLink(void)
 {
     L01_Init();
     Wireless_SwitchToRx();
-    wireless_tx_fail_streak = 0;
+    wireless_rx_idle_streak = 0;
+    LOG_WARN("wireless link recovered (flight ctrl PRX)");
 }
 
-/*!
- *  @brief        Initialize the wireless module
- *  @param        None
- *  @return       None
- *  @note
-*/
+/* ──── 公开 API ──── */
+
+/**
+ * @brief 初始化无线模块（飞控 PRX 模式）
+ * @note  初始化后飞控处于 RX 模式持续监听，等待遥控器发送数据。
+ */
 void Wireless_Init(void)
 {
-    // Initialize nRF24L01+ module here
     L01_Init();
     Wireless_SwitchToRx();
     wireless_semaph = xSemaphoreCreateBinary();
+    LOG_INFO("wireless init done (flight ctrl PRX mode)");
 }
 
 void Wireless_SetReceiveCallback(Wireless_ReceiveCallback callback)
@@ -43,12 +55,9 @@ void Wireless_SetReceiveCallback(Wireless_ReceiveCallback callback)
     wireless_callback = callback;
 }
 
-/*!
- *  @brief        Switch the current RF mode to RX
- *  @param        None
- *  @return       None
- *  @note
-*/
+/**
+ * @brief 切换到 RX 模式
+ */
 void Wireless_SwitchToRx(void)
 {
     L01_SetCE(CE_LOW);
@@ -60,12 +69,11 @@ void Wireless_SwitchToRx(void)
     L01_SetCE(CE_HIGH);
 }
 
-/*!
- *  @brief        Switch the current RF mode to TX
- *  @param        None
- *  @return       None
- *  @note
-*/
+/**
+ * @brief 切换到 TX 模式（保留 API 兼容性）
+ * @note  在 ACK Payload 模式下，飞控不应主动 TX。
+ *        此函数仅用于异常恢复等特殊场景。
+ */
 void Wireless_SwitchToTx(void)
 {
     L01_SetCE(CE_LOW);
@@ -76,77 +84,49 @@ void Wireless_SwitchToTx(void)
     L01_ClearIRQ(IRQ_ALL);
 }
 
-/*!
- *  @brief        Transmit handler for transmit mode
- *  @param        None
- *  @return       None
- *  @note
-*/
-uint8_t Wireless_TransmitHandler(uint8_t transmitData[], uint8_t len)
+/**
+ * @brief 预加载 ACK Payload（飞控遥测数据）
+ * @param data 遥测数据
+ * @param len  数据长度（≤32）
+ * @note  调用后，下一次收到遥控器数据包时，ACK 会自动携带此 payload。
+ *        在每次收到控制包并处理完毕后调用此函数，保证遥测始终新鲜。
+ *        初始化时也应调用一次，确保首个 ACK 不为空。
+ */
+void Wireless_LoadAckPayload(uint8_t *data, uint8_t len)
 {
-    uint8_t res = 0;
-    uint8_t irq_src = 0;
-    Wireless_SwitchToTx();
-    L01_WriteTXPayload_Ack(transmitData, len);
-    L01_SetCE(CE_HIGH);
-    while(GET_L01_IRQ() != 0)
-    {
-        if (myDelay((uint32_t)Wireless_TransmitHandler, WIRELESS_TX_WAIT_MS))
-        {
-            res = 1;
-            break;
-        }
-    }
-    if (res == 0)
-    {
-        irq_src = L01_ReadIRQSource();
-        if (irq_src & (1 << MAX_RT))
-        {
-            res = 1;
-        }
-    }
-    deleteMyDelay((uint32_t)Wireless_TransmitHandler);
-    L01_FlushTX();
-    L01_ClearIRQ(IRQ_ALL);
-    Wireless_SwitchToRx();
-    if (res)
-    {
-        if (++wireless_tx_fail_streak >= 5)
-        {
-            LOG_WARN("wireless tx failed continuously, recover link");
-            Wireless_RecoverLink();
-        }
-    }
-    else
-    {
-        wireless_tx_fail_streak = 0;
-    }
-    return res;
+    L01_WriteRXPayload_InAck(data, len);
 }
 
 /**
- * @brief 涓柇鍥炶皟鎺ュ彈鏁版嵁鍒嗘瀽鍑芥暟
- * 
+ * @brief 发送处理函数（保留 API 兼容性）
+ * @note  在 ACK Payload 模式下，飞控不应主动发送。
+ *        此函数改为仅加载 ACK payload 并立即返回。
+ * @return 始终返回 0（成功）
+ */
+uint8_t Wireless_TransmitHandler(uint8_t transmitData[], uint8_t len)
+{
+    /* 飞控不再主动 TX，改为将数据加载为 ACK payload */
+    Wireless_LoadAckPayload(transmitData, len);
+    return 0;
+}
+
+/* ──── 接收处理 ──── */
+
+/**
+ * @brief 中断回调接收数据分析
+ * @note  在 EXTI ISR 给出信号量后由 Wireless_ReceiveTask 调用。
+ *        处理 RX_DR 中断：读取控制数据 → 回调上层处理 → 清理。
  */
 void Wireless_ReceiveAnalysis(void)
 {
-    if(GET_L01_IRQ() == 0)
+    if (GET_L01_IRQ() == 0)
     {
-        if(L01_ReadIRQSource() & (1 << RX_DR))//detect RF module recieve interrupt
+        uint8_t irq_src = L01_ReadIRQSource();
+        if (irq_src & (1 << RX_DR))
         {
             INT8U len, rcv_buffer[32];
-            if((len = L01_ReadRXPayload(rcv_buffer)) != 0)
+            if ((len = L01_ReadRXPayload(rcv_buffer)) != 0)
             {
-                // do something with the received data
-                // LED1_ON();
-                // uint8_t buff[100];
-                // uint8_t buff_len = 0;
-                // buff_len += sprintf((char *)(buff + buff_len), "len: %d, data: ", len);
-                // for (uint8_t i = 0; i < len; i++)
-                // {
-                //     buff_len += sprintf((char *)(buff + buff_len), "%x", rcv_buffer[i]);
-                // }
-                // LOG_DEBUG("%s",(char *)buff);
                 if (wireless_callback != NULL)
                 {
                     wireless_callback(rcv_buffer, len);
@@ -157,6 +137,8 @@ void Wireless_ReceiveAnalysis(void)
         L01_ClearIRQ(IRQ_ALL);
     }
 }
+
+/* ──── EXTI 中断回调 ──── */
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -181,11 +163,18 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
-// 璇ヤ换鍔′紭鍏堢骇涓€瀹氳姣斿彂閫佷紭鍏堢骇楂?
-void Wireless_ReceiveTask(void* param)
+/* ──── 接收任务 ──── */
+
+/**
+ * @brief 无线接收任务
+ * @note  优先级必须比所有发送任务高。
+ *        等待 EXTI 信号量 → 处理接收数据。
+ *        空闲超时（~1s）后自动恢复链路。
+ */
+void Wireless_ReceiveTask(void *param)
 {
     uint8_t idle_recover_count = 0;
-    while(1)
+    while (1)
     {
         if (xSemaphoreTake(wireless_semaph, pdMS_TO_TICKS(50)) == pdTRUE)
         {
@@ -197,7 +186,7 @@ void Wireless_ReceiveTask(void* param)
             continue;
         }
 
-        if (++idle_recover_count >= 20)
+        if (++idle_recover_count >= WIRELESS_RX_IDLE_RECOVER)
         {
             idle_recover_count = 0;
             LOG_WARN("wireless rx idle too long, recover link");
@@ -208,6 +197,7 @@ void Wireless_ReceiveTask(void* param)
             continue;
         }
 
+        /* 轮询兜底：有时 IRQ 没触发 EXTI，直接查引脚 */
         if (GET_L01_IRQ() == 0)
         {
             HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);

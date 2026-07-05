@@ -32,6 +32,18 @@ uint8_t pitch_init_flag = 0; // 陀螺仪pitch初始化为0标志位
 float_angle offset; //偏移值
 static float acc_z_gravity_offset = 0.0f;
 
+/* ===== 陀螺零偏自校准 (上电后静止采样) ===== */
+/* 与 MiniFly processGyroBias 思路一致：上电后用 1.0 秒采 200 帧,
+   仅当三轴方差都低于阈值时, 才把均值当作零偏. */
+/* 采样长度 200 帧 @200Hz ≈ 1.0s, 与 MiniFly 的 1024 帧@1kHz≈1.0s 时长相当 */
+#define GYRO_CALI_SAMPLES        200
+/* 原始数据是 °/s, 方差单位 (°/s)^2. 静止时 MPU6500 典型 <0.05 deg/s,
+   JY901P 略大, 这里放宽到 4.0, 等同 MiniFly 4000 (他们量纲不同但思路相同) */
+#define GYRO_CALI_VAR_MAX        4.0f
+/* 兜底: 万一校准前已被调用, 也能取个合理值 */
+static float gyro_z_offset = 0.0f;
+static uint8_t gyro_z_calibrated = 0;  /* 0=未完成, 1=已校准通过 */
+
 float32_t bufA[16], bufB[16], bufC[16];
 arm_matrix_instance_f32 T;
 
@@ -39,6 +51,8 @@ arm_matrix_instance_f32 T;
 static void gyro_dataBufferInit(void);
 static void gyro_calibration_delay_ms(uint32_t delay_ms);
 void gyro_calibration(void);
+void gyro_calibrateGyroZOffset(void);
+uint8_t gyro_isGyroZCalibrated(void);
 void gyro_callback(void* this);
 void JY901_SerialWrite(uint8_t *p_ucData, uint32_t uiLen);
 
@@ -54,6 +68,7 @@ void gyro_init(void) {
   gyro_dataBufferInit();          // 初始化数据缓冲区
 	
   gyro_calibration(); // 校准陀螺仪
+  gyro_calibrateGyroZOffset(); // 1.0s 静止自校准陀螺零偏, 上电时跑
   LOG_INFO("gyro init");
 }
 
@@ -86,6 +101,65 @@ void gyro_calibration(void)
     WatchdogGuard_ExitLongAction();
     LOG_INFO("陀螺仪磁力计校准完成");
 #endif
+}
+
+/* 上电后 1.0 秒采 GYRO_CALI_SAMPLES 帧陀螺, 仅当三轴方差都低于阈值
+   时接受均值当零偏. 失败时 gyro_z_offset 保持为 0 并打 LOG_WARN.
+   与 MiniFly sensors.c:411 processGyroBias 思路一致: 上电时静采 + 方差校验. */
+void gyro_calibrateGyroZOffset(void)
+{
+    int32_t cnt = 0;
+    float sum_x = 0.f, sum_y = 0.f, sum_z = 0.f;
+    float sum_x2 = 0.f, sum_y2 = 0.f, sum_z2 = 0.f;
+    float mean_x, mean_y, mean_z;
+    float var_x, var_y, var_z;
+    float gx, gy, gz;
+
+    /* 等 JY901P 输出稳定 (上电后 200ms) */
+    gyro_calibration_delay_ms(200);
+
+    while (cnt < GYRO_CALI_SAMPLES)
+    {
+        gx = stcGyro.w[0];
+        gy = stcGyro.w[1];
+        gz = stcGyro.w[2];
+
+        sum_x  += gx;  sum_x2 += gx * gx;
+        sum_y  += gy;  sum_y2 += gy * gy;
+        sum_z  += gz;  sum_z2 += gz * gz;
+        cnt++;
+
+        /* 5ms 间隔, 200 帧 ≈ 1.0s, 喂狗避免 1s 阻塞期间看门狗复位 */
+        vTaskDelay(pdMS_TO_TICKS(5));
+        WatchdogGuard_FeedNow();
+    }
+
+    mean_x = sum_x / GYRO_CALI_SAMPLES;
+    mean_y = sum_y / GYRO_CALI_SAMPLES;
+    mean_z = sum_z / GYRO_CALI_SAMPLES;
+    var_x  = (sum_x2 - (float)GYRO_CALI_SAMPLES * mean_x * mean_x) / GYRO_CALI_SAMPLES;
+    var_y  = (sum_y2 - (float)GYRO_CALI_SAMPLES * mean_y * mean_y) / GYRO_CALI_SAMPLES;
+    var_z  = (sum_z2 - (float)GYRO_CALI_SAMPLES * mean_z * mean_z) / GYRO_CALI_SAMPLES;
+
+    if (var_x < GYRO_CALI_VAR_MAX && var_y < GYRO_CALI_VAR_MAX && var_z < GYRO_CALI_VAR_MAX)
+    {
+        gyro_z_offset = mean_z;  /* yaw 方向 */
+        gyro_z_calibrated = 1;
+        LOG_INFO("gyro z offset=%.4f deg/s (var_z=%.4f, mean=%.4f,%.4f,%.4f) cali OK",
+                 gyro_z_offset, var_z, mean_x, mean_y, mean_z);
+    }
+    else
+    {
+        gyro_z_offset = 0.0f;
+        gyro_z_calibrated = 0;
+        LOG_WARN("gyro z cali FAIL (var=%.4f,%.4f,%.4f > %.4f), using offset=0, yaw will drift slowly",
+                 var_x, var_y, var_z, GYRO_CALI_VAR_MAX);
+    }
+}
+
+uint8_t gyro_isGyroZCalibrated(void)
+{
+    return gyro_z_calibrated;
 }
 
 static void gyro_calibration_delay_ms(uint32_t delay_ms)
@@ -246,6 +320,8 @@ void gyro_getAngularVelocity(float_gyro* gyro)
     {
         gyro->x = stcGyro.w[0];
         gyro->y = stcGyro.w[1];
-        gyro->z = stcGyro.w[2];
+        /* 扣零偏: 与 MiniFly sensors.c:508-510 同样的处理.
+           即便 gyro_z_calibrated=0, gyro_z_offset 仍为 0, 不影响正常情况. */
+        gyro->z = stcGyro.w[2] - gyro_z_offset;
     }
 }

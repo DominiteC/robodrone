@@ -10,6 +10,7 @@ extern float debug_xy_velocity_pid_count;
 extern float debug_target_angle_pitch;
 extern float debug_target_angle_roll;
 extern float debug_target_angle_yaw;
+extern float debug_desired_yaw;
 extern state_t state;
 extern MotorCtrl debugEsc;
 

@@ -48,12 +48,14 @@ void App_InitSystemModules(void)
   App_InitDevices();
 
   App_InitBusinessModules();
-
+	
+  WatchdogGuard_Init(300);
+	
 //  调试追踪，目前未启用，要使用比较麻烦
 //  xTraceInitialize();
 //  xTraceEnable(TRC_START);
 //  xTraceEnable(TRC_START_FROM_HOST);
-  // WatchdogGuard_Init(300);
+
 }
 
 static void App_InitBusinessModules(void)
@@ -61,7 +63,6 @@ static void App_InitBusinessModules(void)
   position_init();  // 光流之类的进行初始化
   Control_Init();   // PID之类的进行初始化
   // 动力系统初始化
-  //ESC_Calibrate();  // 电调校准，新电调刚开始必须要校准，使用时请取消注释。:请在固定好的情况下使用，不可在无固定下使用校准
   Motor_Init();     // 电机驱动初始化
   vTaskDelay(500);
 //  ServoInit();      // 舵机初始化
@@ -103,6 +104,7 @@ static void App_InitGlobalServices(void)
 static void App_InitDevices(void)
 {
 	Alarm_Init();       // 报警处理初始化
+//	ESC_Calibrate();  // 电调校准，新电调刚开始必须要校准，使用时请取消注释。:请在固定好的情况下使用，不可在无固定下使用校准
   ESC_Init();       // 电调初始化: 输出最小油门PWM, 防止磁校准期间电调滴答
   // 传感器初始化
   BN220_Init();       // GPS初始化

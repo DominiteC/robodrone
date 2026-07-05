@@ -657,3 +657,37 @@
 验证要求：
 
 - 该阶段为格式整理，正常不影响编译结果。
+
+## 第四十一阶段：yaw 控制改用飞控自积分 + 陀螺零偏自校准
+
+本阶段重构 yaw 闭环来源，从"依赖 JY901P 9 轴融合的 `state.angle.yaw`"改为"飞控端用 `state->gyro.z` 自积分"。
+
+改动文件：
+  - `user/abstract/gyro.c`
+  - `user/abstract/gyro.h`
+  - `user/control/control.c`
+
+修了什么问题：
+  - 起飞时机体顺时针自旋、`state.angle.yaw` 变正：把闭环从 JY901P 9 轴融合的 9 轴输出里完全撤出，绕开磁干扰与模块内部偏置问题。
+
+做了什么：
+  - 新增 `gyro_calibrateGyroZOffset()`：上电后 1.0 秒采 200 帧，三轴方差 < 4.0 (°/s)² 才接受零偏（与 MiniFly `processGyroBias` 思路一致）。
+  - `gyro_getAngularVelocity()` 扣 `gyro_z_offset`，新增 `gyro_isGyroZCalibrated()` 标志。
+  - `control.c` 加 `#include "gyro.h"`。
+  - `Yaw_Control` 入口加 `gyro_isGyroZCalibrated() == 0` 早返。
+  - 角度环测量改用飞控内自积分的 `yaw_meas_cont`（`state->gyro.z * ANGEL_PID_DT` 累加，带单拍 5° 野点防护）。
+  - 移除 `isAdjustingYaw` 状态机、移除 `yawOld / yawTurnNum / yawUnwrapInited` 这套 ±180° 展开；改 MiniFly 隐式锁角（角速度=0 → Desired_yaw 不变 → 角度环自然保持）。
+  - `ResetYawState` 用 0 初始化（`Desired_yaw = yaw_meas_cont = 0`），不再从 `state.angle.yaw` 取初值。
+
+是否改变运行逻辑：
+  - 是，yaw 闭环的测量源切换；起飞瞬态 yaw 控制行为变化（角度环不再受磁干扰）。PID 参数、混控符号、ESC 输出限幅、控制频率、JY901P 模块配置保持不变。
+
+还没做：
+  - `position.c` 里的"陀螺倾角补偿"（POSITION_USE_GYRO_COMP 路径）仍读 `state->gyro.z`；该路径已经自动受益于 `gyro_getAngularVelocity` 的零偏扣除。
+  - 加速度/陀螺的二阶 LPF 暂时不加（与本次 bug 修复无关）。
+  - `esc.c:73-76` 的 95% 输出钳位本次未拆（用户要求混控不动）。
+
+验收方法与验证结果：
+  - 静态：编译通过、`file -i` 仍为 UTF-8、行尾 LF 不变（Windows 自动转 CRLF）。
+  - 飞控：上电 1.0s 后应见 `gyro z offset=... cali OK` 或 `gyro z cali FAIL ... using offset=0, yaw will drift slowly` 日志。
+  - 起飞实验：定点起飞后顺时针自旋应当消失；杆打 yaw 转动正常；杆回中后 yaw 角基本不漂。
