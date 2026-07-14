@@ -19,7 +19,7 @@
 
 #define limit(x, min, max) ((x)<(min)?(min):((x)>(max)?(max):(x)))
 
-#define ALTHOLD_THRUST_BASE 50.0f //悬停使用的基准油门
+#define ALTHOLD_THRUST_BASE 49.0f //悬停使用的基准油门
 #define YAW_MAX_RATE	42.0f				// 满杆yaw角速率 deg/s
 #define YAW_DEADBAND	5.0f				// yaw杆死区
 
@@ -221,16 +221,16 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     // 设置电调输出
     if (!state->isRCLocked && throttle > 2)
     {
-//			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
 
-//			 // 添加最小油门限制，确保电机不会停转
-//			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 80);
-//			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 0, 80);
-//			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 0, 80);
-//			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 0, 80);
+			 // 添加最小油门限制，确保电机不会停转
+			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 80);
+			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 0, 80);
+			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 0, 80);
+			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 0, 80);
 //				ctrl->Esc_Percent_2 = 10;
 
         // LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4);
@@ -380,12 +380,6 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
         PIDCalculate(&pid_yaw_angle, yaw_meas_cont, Desired_yaw);
         debug_target_angle_yaw = wrapYawDisplay(Desired_yaw);
-        if (fabsf(pid_yaw_angle.Err) < pid_yaw_angle.DeadBand)
-        {
-            pid_yaw_angle.Output = 0;
-            pid_yaw_angle.Last_Output = 0;
-        }
-
 
         // if (myDelay((uint32_t)Yaw_Control,100))
         //     LOG_DEBUG("state-yaw:%.2f,set-yaw:%.2f,output:%.2f",yaw_meas_cont,Desired_yaw,pid_yaw_angle.Output);
@@ -397,12 +391,6 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
 //        PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);
         PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);//target->angle.yaw/10
-        if (fabsf(pid_yaw_rate.Err) < pid_yaw_rate.DeadBand)
-        {
-            pid_yaw_rate.Output = 0;
-            pid_yaw_rate.Last_Output = 0;
-        }
-
 
         // LOG_DEBUG("state-yaw-rate:%.2f,set-yaw-rate:%.2f,output:%.2f",state->gyro.z,pid_yaw_angle.Output,pid_yaw_rate.Output);
     }

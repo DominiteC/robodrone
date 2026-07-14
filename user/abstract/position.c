@@ -270,24 +270,24 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
         if ((now - last_log_time) >= POSITION_LOG_INTERVAL_MS)
         {
             last_log_time = now;
-            LOG_INFO("flow:%d,%d dist:%lu,%lu q:%u st:%u,%u att:%.2f,%.2f gyro:%.2f,%.2f raw:%.2f,%.2f gc:%.2f,%.2f vel:%.2f,%.2f",
-                     payload.flow_vel_x,
-                     payload.flow_vel_y,
-                     (unsigned long)distance_raw,
-                     (unsigned long)distance_filtered,
-                     payload.flow_quality,
-                     payload.tof_status,
-                     payload.flow_status,
-                     angle ? angle->roll : 0.0f,
-                     angle ? angle->pitch : 0.0f,
-                     gyro ? gyro->x : 0.0f,
-                     gyro ? gyro->y : 0.0f,
-                     raw_vx,
-                     raw_vy,
-                     gyro_comp_x,
-                     gyro_comp_y,
-                     final_vx,
-                     final_vy);
+//            LOG_INFO("flow:%d,%d dist:%lu,%lu q:%u st:%u,%u att:%.2f,%.2f gyro:%.2f,%.2f raw:%.2f,%.2f gc:%.2f,%.2f vel:%.2f,%.2f",
+//                     payload.flow_vel_x,
+//                     payload.flow_vel_y,
+//                     (unsigned long)distance_raw,
+//                     (unsigned long)distance_filtered,
+//                     payload.flow_quality,
+//                     payload.tof_status,
+//                     payload.flow_status,
+//                     angle ? angle->roll : 0.0f,
+//                     angle ? angle->pitch : 0.0f,
+//                     gyro ? gyro->x : 0.0f,
+//                     gyro ? gyro->y : 0.0f,
+//                     raw_vx,
+//                     raw_vy,
+//                     gyro_comp_x,
+//                     gyro_comp_y,
+//                     final_vx,
+//                     final_vy);
         }
     }
 }
