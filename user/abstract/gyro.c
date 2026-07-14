@@ -146,15 +146,17 @@ void gyro_calibrateGyroZOffset(void)
     {
         gyro_z_offset = mean_z;  /* yaw 方向 */
         gyro_z_calibrated = 1;
-        LOG_INFO("gyro z offset=%.4f deg/s (var_z=%.4f, mean=%.4f,%.4f,%.4f) cali OK",
-                 gyro_z_offset, var_z, mean_x, mean_y, mean_z);
+        gyro_cali_offset = mean_z;
+        gyro_cali_var_z  = var_z;
+        gyro_cali_status = 1;
     }
     else
     {
         gyro_z_offset = 0.0f;
         gyro_z_calibrated = 0;
-        LOG_WARN("gyro z cali FAIL (var=%.4f,%.4f,%.4f > %.4f), using offset=0, yaw will drift slowly",
-                 var_x, var_y, var_z, GYRO_CALI_VAR_MAX);
+        gyro_cali_offset = 0.0f;
+        gyro_cali_var_z  = var_z;
+        gyro_cali_status = 2;
     }
 }
 
@@ -162,6 +164,12 @@ uint8_t gyro_isGyroZCalibrated(void)
 {
     return gyro_z_calibrated;
 }
+
+/* 校准结果供地面站遥测读取, 不在中断内用 LOG_INFO 避免
+   log_sprintf_buffer_lock 关中断期间 SysTick 停跑导致 IWDG 复位. */
+float  gyro_cali_offset = 0.0f;
+float  gyro_cali_var_z  = 0.0f;
+uint8_t gyro_cali_status = 0;  /* 0=未完成, 1=通过, 2=失败 */
 
 static void gyro_calibration_delay_ms(uint32_t delay_ms)
 {
