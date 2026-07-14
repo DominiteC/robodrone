@@ -68,7 +68,8 @@ void gyro_init(void) {
   gyro_dataBufferInit();          // 初始化数据缓冲区
 	
   gyro_calibration(); // 校准陀螺仪
-  gyro_calibrateGyroZOffset(); // 1.0s 静止自校准陀螺零偏, 上电时跑
+  /* 陀螺零偏自校准已移至独立任务 gyroCalibTask,
+     不再在 gyro_init 里同步阻塞 1.0s 避免卡死启动流程. */
   LOG_INFO("gyro init");
 }
 

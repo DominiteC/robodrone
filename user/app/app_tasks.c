@@ -13,6 +13,7 @@
 #include "mtf_01.h"
 #include "watchdog_guard.h"
 #include "usmart.h"
+#include "gyro.h"            /* gyro_calibrateGyroZOffset */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -34,6 +35,8 @@
 #define TASK_PRIO_MTF01       3
 #define TASK_STACK_WDOG       180
 #define TASK_PRIO_WDOG        5
+#define TASK_STACK_GYRO_CALIB 200
+#define TASK_PRIO_GYRO_CALIB  1
 
 static void usmart_task(void* param);
 
@@ -53,6 +56,7 @@ void App_CreateTasks(void)
   xTaskCreate(Control_Task,"Control",TASK_STACK_CONTROL,NULL,TASK_PRIO_CONTROL,NULL);          // 控制任务，飞控核心任务，包括姿态解算，位置解算，控制算法等，控制电机驱动，电调和舵机。
   xTaskCreate(mtf_01_task,"mtf_01",TASK_STACK_MTF01,NULL,TASK_PRIO_MTF01,NULL);            // 光流模块任务
   xTaskCreate(WatchdogGuard_Task,"WDog",TASK_STACK_WDOG,NULL,TASK_PRIO_WDOG,NULL);       // 看门狗任务
+  xTaskCreate(gyroCalibTask,"GyroCalib",TASK_STACK_GYRO_CALIB,NULL,TASK_PRIO_GYRO_CALIB,NULL); // 陀螺零偏自校准任务(1.0s后自删)
 }
 
 static void usmart_task(void* param)
@@ -63,4 +67,14 @@ static void usmart_task(void* param)
         usmart_scan();
         vTaskDelayUntil(&lastWakeTime, 20);        /*20ms周期延时*/
     }
+}
+
+/* 陀螺零偏自校准任务: 上电后 1.0s 采 200 帧, 校准通过后自删.
+   优先级 1 低于 Control(prio 2) 高于 Idle(prio 0),
+   不阻塞启动流程, 校准未完成期间 Yaw_Control 早返不产生差分. */
+static void gyroCalibTask(void* param)
+{
+    (void)param;
+    gyro_calibrateGyroZOffset();
+    vTaskDelete(NULL);
 }
