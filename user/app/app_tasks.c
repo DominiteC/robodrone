@@ -1,7 +1,7 @@
 /*
  * app_tasks.c
- * ¸ºÔğ¼¯ÖĞ´´½¨ FreeRTOS ÒµÎñÈÎÎñ£¬²¢Î¬»¤ÈÎÎñÕ»´óĞ¡ºÍÓÅÏÈ¼¶¡£
- * ±¾ÎÄ¼ş²»¸ºÔğÉè±¸³õÊ¼»¯ºÍ¿ØÖÆËã·¨ÊµÏÖ¡£
+ * è´Ÿè´£é›†ä¸­åˆ›å»º FreeRTOS ä¸šåŠ¡ä»»åŠ¡ï¼Œå¹¶ç»´æŠ¤ä»»åŠ¡æ ˆå¤§å°å’Œä¼˜å…ˆçº§ã€‚
+ * æœ¬æ–‡ä»¶ä¸è´Ÿè´£è®¾å¤‡åˆå§‹åŒ–å’Œæ§åˆ¶ç®—æ³•å®ç°ã€‚
  */
 #include "app_tasks.h"
 #include "app_config.h"
@@ -18,7 +18,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-/* ÈÎÎñ×ÊÔ´ÅäÖÃ¼¯ÖĞ·ÅÔÚÕâÀï£¬±ãÓÚºóĞøµ÷ÕûÊ±ºË¶ÔÕ»´óĞ¡ºÍÓÅÏÈ¼¶¡£ */
+/* ä»»åŠ¡èµ„æºé…ç½®é›†ä¸­æ”¾åœ¨è¿™é‡Œï¼Œä¾¿äºåç»­è°ƒæ•´æ—¶æ ¸å¯¹æ ˆå¤§å°å’Œä¼˜å…ˆçº§ã€‚ */
 #define TASK_STACK_ALARM      150
 #define TASK_PRIO_ALARM       2
 #define TASK_STACK_USMART     250
@@ -42,21 +42,21 @@ static void usmart_task(void* param);
 
 void App_CreateTasks(void)
 {
-  // FreertosÈÎÎñ´´½¨
-  xTaskCreate(Alarm_Update,"Alarm",TASK_STACK_ALARM,NULL,TASK_PRIO_ALARM,NULL);            // ±¨¾¯´¦ÀíÈÎÎñ£¬°üÀ¨µÍµçÑ¹¼ì²â£¬×ËÌ¬¼ì²â
+  // Freertosä»»åŠ¡åˆ›å»º
+  xTaskCreate(Alarm_Update,"Alarm",TASK_STACK_ALARM,NULL,TASK_PRIO_ALARM,NULL);            // æŠ¥è­¦å¤„ç†ä»»åŠ¡ï¼ŒåŒ…æ‹¬ä½ç”µå‹æ£€æµ‹ï¼Œå§¿æ€æ£€æµ‹
 #if ENABLE_GCS_SERIAL
   #if USE_USMART_OR_ANO == 1
-    xTaskCreate(usmart_task,"usmart",TASK_STACK_USMART,NULL,TASK_PRIO_USMART,NULL);            // usmartÈÎÎñ£¬ÔÚ´®¿ÚÖĞµ÷ÓÃº¯Êı£¬ÓëANO_DT_Data_ExchangeÈÎÎñ»¥³â
+    xTaskCreate(usmart_task,"usmart",TASK_STACK_USMART,NULL,TASK_PRIO_USMART,NULL);            // usmartä»»åŠ¡ï¼Œåœ¨ä¸²å£ä¸­è°ƒç”¨å‡½æ•°ï¼Œä¸ANO_DT_Data_Exchangeä»»åŠ¡äº’æ–¥
   #elif USE_USMART_OR_ANO == 0
-    xTaskCreate(ANO_DT_Data_Exchange,"ANO_DT",TASK_STACK_ANO_DT,NULL,TASK_PRIO_ANO_DT,NULL);   // ÓëµØÃæÕ¾Êı¾İ½»»»ÈÎÎñ£¬Í¨¹ı´®¿Ú·¢ËÍÊı¾İ£¬ÓëusmartÈÎÎñ»¥³â
+    xTaskCreate(ANO_DT_Data_Exchange,"ANO_DT",TASK_STACK_ANO_DT,NULL,TASK_PRIO_ANO_DT,NULL);   // ä¸åœ°é¢ç«™æ•°æ®äº¤æ¢ä»»åŠ¡ï¼Œé€šè¿‡ä¸²å£å‘é€æ•°æ®ï¼Œä¸usmartä»»åŠ¡äº’æ–¥
   #endif
 #endif
-  xTaskCreate(SendToRemote,"Send",TASK_STACK_SEND,NULL,TASK_PRIO_SEND,NULL);             // ·¢ËÍÒ£¿ØÊı¾İÈÎÎñ£¬Í¨¹ıÎŞÏßÄ£¿é·¢ËÍÊı¾İ
-  xTaskCreate(Wireless_ReceiveTask,"Receive",TASK_STACK_RECEIVE,NULL,TASK_PRIO_RECEIVE,NULL);  // ½ÓÊÕÒ£¿ØÊı¾İÈÎÎñ£¬Í¨¹ıÎŞÏßÄ£¿é½ÓÊÕÊı¾İ
-  xTaskCreate(Control_Task,"Control",TASK_STACK_CONTROL,NULL,TASK_PRIO_CONTROL,NULL);          // ¿ØÖÆÈÎÎñ£¬·É¿ØºËĞÄÈÎÎñ£¬°üÀ¨×ËÌ¬½âËã£¬Î»ÖÃ½âËã£¬¿ØÖÆËã·¨µÈ£¬¿ØÖÆµç»úÇı¶¯£¬µçµ÷ºÍ¶æ»ú¡£
-  xTaskCreate(mtf_01_task,"mtf_01",TASK_STACK_MTF01,NULL,TASK_PRIO_MTF01,NULL);            // ¹âÁ÷Ä£¿éÈÎÎñ
-  xTaskCreate(WatchdogGuard_Task,"WDog",TASK_STACK_WDOG,NULL,TASK_PRIO_WDOG,NULL);       // ¿´ÃÅ¹·ÈÎÎñ
-  xTaskCreate(gyroCalibTask,"GyroCalib",TASK_STACK_GYRO_CALIB,NULL,TASK_PRIO_GYRO_CALIB,NULL); // ÍÓÂİÁãÆ«×ÔĞ£×¼ÈÎÎñ(1.0sºó×ÔÉ¾)
+  xTaskCreate(SendToRemote,"Send",TASK_STACK_SEND,NULL,TASK_PRIO_SEND,NULL);             // å‘é€é¥æ§æ•°æ®ä»»åŠ¡ï¼Œé€šè¿‡æ— çº¿æ¨¡å—å‘é€æ•°æ®
+  xTaskCreate(Wireless_ReceiveTask,"Receive",TASK_STACK_RECEIVE,NULL,TASK_PRIO_RECEIVE,NULL);  // æ¥æ”¶é¥æ§æ•°æ®ä»»åŠ¡ï¼Œé€šè¿‡æ— çº¿æ¨¡å—æ¥æ”¶æ•°æ®
+  xTaskCreate(Control_Task,"Control",TASK_STACK_CONTROL,NULL,TASK_PRIO_CONTROL,NULL);          // æ§åˆ¶ä»»åŠ¡ï¼Œé£æ§æ ¸å¿ƒä»»åŠ¡ï¼ŒåŒ…æ‹¬å§¿æ€è§£ç®—ï¼Œä½ç½®è§£ç®—ï¼Œæ§åˆ¶ç®—æ³•ç­‰ï¼Œæ§åˆ¶ç”µæœºé©±åŠ¨ï¼Œç”µè°ƒå’Œèˆµæœºã€‚
+  xTaskCreate(mtf_01_task,"mtf_01",TASK_STACK_MTF01,NULL,TASK_PRIO_MTF01,NULL);            // å…‰æµæ¨¡å—ä»»åŠ¡
+  xTaskCreate(WatchdogGuard_Task,"WDog",TASK_STACK_WDOG,NULL,TASK_PRIO_WDOG,NULL);       // çœ‹é—¨ç‹—ä»»åŠ¡
+  xTaskCreate(gyroCalibTask,"GyroCalib",TASK_STACK_GYRO_CALIB,NULL,TASK_PRIO_GYRO_CALIB,NULL); // é™€èºé›¶åè‡ªæ ¡å‡†ä»»åŠ¡(1.0såè‡ªåˆ )
 }
 
 static void usmart_task(void* param)
@@ -65,13 +65,13 @@ static void usmart_task(void* param)
     while(1)
     {
         usmart_scan();
-        vTaskDelayUntil(&lastWakeTime, 20);        /*20msÖÜÆÚÑÓÊ±*/
+        vTaskDelayUntil(&lastWakeTime, 20);        /*20mså‘¨æœŸå»¶æ—¶*/
     }
 }
 
-/* ÍÓÂİÁãÆ«×ÔĞ£×¼ÈÎÎñ: ÉÏµçºó 1.0s ²É 200 Ö¡, Ğ£×¼Í¨¹ıºó×ÔÉ¾.
-   ÓÅÏÈ¼¶ 1 µÍÓÚ Control(prio 2) ¸ßÓÚ Idle(prio 0),
-   ²»×èÈûÆô¶¯Á÷³Ì, Ğ£×¼Î´Íê³ÉÆÚ¼ä Yaw_Control Ôç·µ²»²úÉú²î·Ö. */
+/* é™€èºé›¶åè‡ªæ ¡å‡†ä»»åŠ¡: ä¸Šç”µå 1.0s é‡‡ 200 å¸§, æ ¡å‡†é€šè¿‡åè‡ªåˆ .
+   ä¼˜å…ˆçº§ 1 ä½äº Control(prio 2) é«˜äº Idle(prio 0),
+   ä¸é˜»å¡å¯åŠ¨æµç¨‹, æ ¡å‡†æœªå®ŒæˆæœŸé—´ Yaw_Control æ—©è¿”ä¸äº§ç”Ÿå·®åˆ†. */
 static void gyroCalibTask(void* param)
 {
     (void)param;
