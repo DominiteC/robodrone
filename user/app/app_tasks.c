@@ -39,6 +39,7 @@
 #define TASK_PRIO_GYRO_CALIB  1
 
 static void usmart_task(void* param);
+static void gyroCalibTask(void* param);
 
 void App_CreateTasks(void)
 {
