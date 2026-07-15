@@ -29,7 +29,7 @@ static float thrustCmd = 0;    /* 实际用于混控前的推力命令 */
 static float Desired_yaw = 0.0f;          /* 期望 yaw 角度, 连续 deg, 不做 ±180° 包裹 (MiniFly 方式) */
 /* 飞控自积分的连续 yaw 角度 (度), 由 state->gyro.z * ANGEL_PID_DT 累加得到.
    完全不依赖 JY901P 9 轴融合的 state.angle.yaw. */
-static float yaw_meas_cont = 0.0f;
+float yaw_meas_cont = 0.0f;
 /* 野点防护: 单拍积分增量 > YAW_INTEG_MAX 度/拍 则丢掉当拍 */
 #define YAW_INTEG_MAX_PER_STEP   5.0f
 /* yaw 杆 LPF (与 MiniFly ctrlValLpf.yaw 相同思路): 松手后平滑衰减, 避免 Desired_yaw 突停 */
