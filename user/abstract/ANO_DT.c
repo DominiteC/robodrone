@@ -115,7 +115,7 @@ void ANO_DT_Data_Exchange(void *param)
 			f.send_status = 0;
 			float_angle angle;
 			gyro_getAngle(&angle);
-			ANO_DT_Send_Status(angle.roll,angle.pitch,angle.yaw,0,0,getIsLock());
+			ANO_DT_Send_Status(angle.roll,angle.pitch,debug_yaw_meas_cont,0,0,getIsLock());
 		}	
 /////////////////////////////////////////////////////////////////////////////////////
 		if(f.send_senser)
@@ -170,7 +170,7 @@ ANO_DT_Send_RCDataFloat(
                         state.velocity.y,           // 9-Y velocity cm/s
                         pid_yaw_angle.Err,              // 10-gyro Z
                         debug_desired_yaw,           // 11-展开后目标 yaw 角度（连续值）
-                        state.angle.yaw	         // 12-原始 yaw 角度
+                        debug_yaw_meas_cont	         // 12-飞控积分 yaw
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	
