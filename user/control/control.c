@@ -197,7 +197,7 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     bool flightActive = getCommanderKeyFlight() || getCommanderKeyland();
     static uint32_t tick = 0;
 
-    if (!state->isRCLocked && flightActive)
+    if (flightActive)
     {
         Roll_Pitch_Control(target,state,tick);
         Yaw_Control(target,state,tick);
@@ -221,7 +221,7 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 
     // LOG_INFO("thr:%.2f,roll:%.2f,pit:%.2f,yaw:%.2f",throttle,pid_roll_rate.Output,pid_pitch_rate.Output,pid_yaw_rate.Output);
     // 设置电调输出
-    if (!state->isRCLocked && throttle > 2)
+    if (throttle > 2)
     {
 			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
 			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
@@ -356,16 +356,21 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
     if (RATE_DO_EXECUTE(ANGEL_PID_RATE,tick))
     {
+        float raw_stick = -target->angle.yaw;
+
         /* 飞控端用 state->gyro.z 自积分出连续 yaw 角度 (度).
            不再用 JY901P 9 轴融合的 state.angle.yaw, 完全摆脱磁干扰与模块偏置. */
         float yaw_step = state->gyro.z * ANGEL_PID_DT;
         if (fabsf(yaw_step) < YAW_INTEG_MAX_PER_STEP)
         {
-            yaw_meas_cont += yaw_step;
+            /* 杆回中时 |gyro.z|<0.5°/s 是电机振动导致的零偏偏移, 不积分.
+               杆偏时正常积分 (MiniFly 用 Mahony accel 修正同理, 我们没这层). */
+            if (fabsf(raw_stick) > YAW_DEADBAND || fabsf(state->gyro.z) > 0.5f)
+            {
+                yaw_meas_cont += yaw_step;
+            }
         }
-        /* 野点保护: 单拍增量过大则丢掉, 避免 sensor 跳变污染积分 */
 
-        float raw_stick = -target->angle.yaw;
         /* LPF 平滑杆量 (与 MiniFly commander.c:117 ctrlValLpf.yaw 思路一致).
            alpha=0.1 @250Hz → τ≈38ms, MiniFly α=0.2 @100Hz → τ≈45ms, 接近. */
         lpf_stick_yaw += (raw_stick - lpf_stick_yaw) * 0.1f;
