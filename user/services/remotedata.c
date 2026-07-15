@@ -116,7 +116,7 @@ static void UpdateAckTelemetry(void)
     temp = (int)(RC_Control.throttle * 100);
     SI24R1_TX_DATA[2]  = Byte1(temp);
     SI24R1_TX_DATA[3]  = Byte0(temp);
-    temp = (int)(yaw_meas_cont * 100);
+    temp = (int)(getYawMeasCont() * 100);
     SI24R1_TX_DATA[4]  = Byte1(temp);
     SI24R1_TX_DATA[5]  = Byte0(temp);
     temp = (int)(Att_Angle.pitch * 100);

@@ -577,6 +577,11 @@ float getThrustCmd(void)
     return thrustCmd;
 }
 
+float getYawMeasCont(void)
+{
+    return yaw_meas_cont;
+}
+
 static float wrapYawDisplay(float yaw)
 {
     yaw = fmodf(yaw + 180.0f, 360.0f);
