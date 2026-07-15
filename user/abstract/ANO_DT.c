@@ -170,7 +170,7 @@ ANO_DT_Send_RCDataFloat(
                         state.velocity.y,           // 9-Y velocity cm/s
                         pid_yaw_angle.Err,              // 10-gyro Z
                         debug_desired_yaw,           // 11-展开后目标 yaw 角度（连续值）
-                        debug_yaw_meas_cont,           // 12-飞控自积分 yaw 角度
+                        state.angle.yaw	         // 12-原始 yaw 角度
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	
