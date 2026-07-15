@@ -169,8 +169,13 @@
 ### F-10. yaw 闭环依赖 JY901P 9 轴融合的 `state.angle.yaw`
 
 - **历史问题**：起飞时机体顺时针自旋但 `state.angle.yaw` 变正；停机手动顺时针旋转时 `state.angle.yaw` 与 `gyro.z` 变负，符号与机体一致。说明闭环测量源被污染。
-- **影响**：起飞瞬态 yaw 控制器与被磁干扰/模块偏置污染的 `state.angle.yaw` 形成正反馈；磁力计配置（`ALGRITHM9=0`，即 9 轴）使磁干扰作为航向变化进入融合。
-- **证据**：`user/control/control.c:392`（原）`PIDCalculate(&pid_yaw_angle, yaw_meas_cont, Desired_yaw)` 中 `yaw_meas_cont = state->angle.yaw + yawTurnNum * 360.0f`；`user/abstract/gyro.c` 上电初始化未写 `AXIS6` 寄存器，模块按 9 轴默认运行。
+- **真实根因（推翻之前误判）**：`Yaw_Control` 里 `if (!yawUnwrapInited) { Desired_yaw = state->angle.yaw; yawUnwrapInited = true; }`，**起飞第一拍就把第一帧 `state.angle.yaw` 当成目标锁住**。但飞机推油门到 20% 准备起飞时，电机已经在转、地面不平、机体微抖、磁力计尚在追，**第一帧 `state.angle.yaw` 已经是错的**（与真航向差几度）。`Desired_yaw` 锁到这个错值后，角度环会一直补偿到那个错角，表现为“起飞瞬间顺时针自旋到半空才稳定”。杆打 yaw 是在错角基础上累加，不受锁角影响，所以 T3 之后正常。
+- **早期误判**：曾以为主因是“JY901P 9 轴融合被磁力计实时污染”。**该判断不成立**——该现象与“停机手动顺时针时 `state.angle.yaw` 变负、与 `gyro.z` 符号一致”是兼容的，因为起飞时真正的污染方是“第一帧”而非“持续磁干扰”。如果真是持续污染，停机手动也该反向（不会）。
+- **证据**：
+  - `user/control/control.c`（旧版 392 行附近）`yawUnwrapInited=false` 时把 `Desired_yaw = state.angle.yaw`，**没有检查这一帧是否可信**。
+  - 拆桨起飞时同样顺时针自旋——如果主因是磁干扰，桨卸了磁干扰仍在，飞机应该同样被污染、但此时 `state.angle.yaw` 与手转同向，反而证实磁干扰不是主因。
+  - 新版用 `gyro.z * dt` 自积分，第一帧 `gyro.z` 接近 0（飞机静止、陀螺零偏已扣），`yaw_meas_cont = 0` 没有“锁错初值”问题。
+- **早期误判的副产物**：F-10 早期条目把“9 轴被磁力计污染”写成了影响，这是错的。本条目以 2026-07-14 现场验证结果为准。
 - **解决方式（2026-07-14 第四十一阶段）**：
   - `gyro.c` 新增 `gyro_calibrateGyroZOffset()`：上电后 1.0 秒采 200 帧，三轴方差 < 4.0 (°/s)² 才接受零偏（MiniFly 思路）。
   - `gyro_getAngularVelocity()` 扣 `gyro_z_offset`；`gyro_isGyroZCalibrated()` 标志位。
