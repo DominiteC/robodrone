@@ -90,6 +90,15 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+	// 提前将电调信号引脚 PC6-PC9 拉低，避免浮空期 EMI 干扰电调初始化
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
+	GPIO_InitTypeDef esc_gpio = {0};
+	esc_gpio.Pin = GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
+	esc_gpio.Mode = GPIO_MODE_OUTPUT_PP;
+	esc_gpio.Pull = GPIO_NOPULL;
+	esc_gpio.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOC, &esc_gpio);
 	HAL_Delay(300);
   /* USER CODE END SysInit */
 

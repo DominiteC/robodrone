@@ -18,11 +18,11 @@ void ESC_Init(void)
 	__HAL_TIM_SetCompare(&ESC_TIM_HANDLE,ESC_3_TIM_CHANNEL,ESC_MIN_THROTTLE);
 	__HAL_TIM_SetCompare(&ESC_TIM_HANDLE,ESC_4_TIM_CHANNEL,ESC_MIN_THROTTLE);
 
-	// 开启PWM输出
-	HAL_TIM_PWM_Start(&ESC_TIM_HANDLE,ESC_1_TIM_CHANNEL);
-	HAL_TIM_PWM_Start(&ESC_TIM_HANDLE,ESC_2_TIM_CHANNEL);
-	HAL_TIM_PWM_Start(&ESC_TIM_HANDLE,ESC_3_TIM_CHANNEL);
-	HAL_TIM_PWM_Start(&ESC_TIM_HANDLE,ESC_4_TIM_CHANNEL);
+	// 同步开启PWM输出: 先使能所有通道，再启动定时器
+	// 确保4路PWM在同一时钟边沿开始输出，电调同步初始化
+	TIM8->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E);
+	TIM8->BDTR |= TIM_BDTR_MOE;   // 高级定时器主输出使能
+	TIM8->CR1  |= TIM_CR1_CEN;    // 启动计数器
 }
 
 static void ESC_Set_Channel_PWM(uint32_t Channel, uint16_t PWM)

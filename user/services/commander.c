@@ -9,6 +9,7 @@
 #include "PIDcontroller.h"
 #include "position.h"
 #include "AT24Cxx.h"
+#include "alarm.h"
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -47,7 +48,9 @@ static bool safetyLatched = false;          /* 姿态保护锁存，需人工清
 static bool attitudeModeChanged = false;    /* 姿态模式是否发生手动切换 */
 
 static float minAccZ = 0.f; 
-static float maxAccZ = 0.f; 
+static float maxAccZ = 0.f;        /* 跟踪下降方向最大加速度 (cm/s^2)，用于失控保护 */
+static uint16_t maxAccZOverCnt = 0;/* 超过阈值持续计数，避免单帧抖动误触 */
+static uint16_t maxAccZWinCnt = 0; /* 跟踪窗口计数器，每 200ms 重置一次 maxAccZ */
 
 static commanderBits_t commander;
 
@@ -131,9 +134,13 @@ uint8_t ctrlDataUpdate(uint8_t reciveFlag)
 	{
 		isRCLocked = false;			/*解锁*/
 	}
+	else if (tickNow < COMMANDER_WDT_TIMEOUT_HOVER)
+	{
+		isRCLocked = true;			/*断连悬停：锁定但不降落*/
+	}
     else
 	{
-		isRCLocked = true;			/*锁定*/
+		isRCLocked = true;			/*超时锁定*/
 		commanderDropToGround();
 		return 3;
 	}
@@ -356,48 +363,67 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 						setpoint->vel.z = climb;
 						setpoint->height = holdHeight;
 
+						/* 失控保护：油门拉下降 + 下降加速度超阈值持续 ~0.8s 触发
+						 * 改为持续判断避免单帧抖动误触；触发后切一键降落走 5s 斜坡 */
 						if (climbRaw < -0.2f)
 						{
-							if (maxAccZ < state->acc.z)
+							if (state->acc.z > maxAccZ)
 								maxAccZ = state->acc.z;
+
 							if (maxAccZ > 250.f)
 							{
-								commander.keyFlight = false;
+								if (++maxAccZOverCnt > 200)
+								{
+									LOG_WARN("失控保护触发: maxAccZ=%.1f cm/s^2, climbRaw=%.2f, 切一键降落",
+										maxAccZ, climbRaw);
+									Alarm_SetMode(ALARM_MODE_ERROR);
+									commander.keyFlight = false;
+									commander.keyLand = true;   /* 走 5s 降落斜坡，不硬停 */
+								}
 							}
+							else
+							{
+								maxAccZOverCnt = 0;
+							}
+						}
+						else if (isAdjustingPosZ == true)
+						{
+							if (isBrakingPosZ == false)
+							{
+								isBrakingPosZ = true;
+								brakePosZTime = 0;
+							}
+
+							setpoint->mode_z = modeVelocity;
+							setpoint->vel.z = 0;
+
+							if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
+							{
+								isAdjustingPosZ = false;
+								isBrakingPosZ = false;
+								brakePosZTime = 0;
+								holdHeight = state->height + errorPosZ;
+								setpoint->mode_z = modeAbs;
+							}
+							setpoint->height = holdHeight;
 						}
 						else
 						{
-							maxAccZ = 0.f;
-						}
-					}
-					else if (isAdjustingPosZ == true)
-					{
-						if (isBrakingPosZ == false)
-						{
-							isBrakingPosZ = true;
-							brakePosZTime = 0;
-						}
-
-						setpoint->mode_z = modeVelocity;
-						setpoint->vel.z = 0;
-
-						if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
-						{
-							isAdjustingPosZ = false;
-							isBrakingPosZ = false;
-							brakePosZTime = 0;
-							holdHeight = state->height + errorPosZ;
 							setpoint->mode_z = modeAbs;
+							setpoint->vel.z = 0;
+							errorPosZ = holdHeight - state->height;
+							errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
+							setpoint->height = holdHeight;
 						}
-						setpoint->height = holdHeight;
 					}
-					else
+
+					/* 跟踪窗口每 ~3.2s 重置一次 (250Hz*800=200000)，
+					 * 避免 maxAccZ 长时间累积导致后续小波动也被误触（独立顶层） */
+					if (++maxAccZWinCnt > 800)
 					{
-						setpoint->mode_z = modeAbs;
-						setpoint->vel.z = 0;
-						errorPosZ = holdHeight - state->height;
-						errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
-						setpoint->height = holdHeight;
+						maxAccZWinCnt = 0;
+						maxAccZ = 0.f;
+						maxAccZOverCnt = 0;
 					}
 				}
 			}
@@ -570,6 +596,8 @@ void setCommanderKeyFlight(bool set)
 
 			minAccZ = 0.f;
 			maxAccZ = 0.f;
+			maxAccZOverCnt = 0;
+			maxAccZWinCnt = 0;
 			initHigh = false;
 			xyHoldActive = false;
 		}

@@ -41,6 +41,7 @@ float debug_target_angle_pitch = 0.0f;
 float debug_target_angle_roll = 0.0f;
 float debug_target_angle_yaw = 0.0f;
 float debug_desired_yaw = 0.0f;             /* unfolded target yaw (continuous) */
+float debug_yaw_meas_cont = 0.0f;          /* yaw_meas_cont snapshot for telemetry */
 
 static MotorCtrl control;
 MotorCtrl debugEsc;
@@ -370,6 +371,7 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
                 yaw_meas_cont += yaw_step;
             }
         }
+        debug_yaw_meas_cont = yaw_meas_cont;
 
         /* LPF 平滑杆量 (与 MiniFly commander.c:117 ctrlValLpf.yaw 思路一致).
            alpha=0.1 @250Hz → τ≈38ms, MiniFly α=0.2 @100Hz → τ≈45ms, 接近. */

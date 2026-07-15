@@ -12,6 +12,7 @@
 #include "remotedata.h"
 
 #define COMMANDER_WDT_TIMEOUT_STABILIZE  500
+#define COMMANDER_WDT_TIMEOUT_HOVER      5000   /* 断连5秒内悬停，超时后自动降落 */
 #define COMMANDER_WDT_TIMEOUT_SHUTDOWN   1000
 
 typedef struct _command

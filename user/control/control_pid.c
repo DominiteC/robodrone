@@ -129,7 +129,7 @@ PID_Init_Config_s pid_pitch_angle_config = {
 };
 PID_Init_Config_s pid_yaw_angle_config = {
 //    .Kp = 3.0f,
-	.Kp = 2.5f,
+	.Kp = 3.0f,
     .Ki = 0.0f,
     .Kd = 0.0f,
     .MaxOut = 100.0f, //оч╥Ы

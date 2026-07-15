@@ -11,6 +11,7 @@ extern float debug_target_angle_pitch;
 extern float debug_target_angle_roll;
 extern float debug_target_angle_yaw;
 extern float debug_desired_yaw;
+extern float debug_yaw_meas_cont;      /* yaw_meas_cont 镜像, 供地面站遥测 */
 extern state_t state;
 extern MotorCtrl debugEsc;
 
