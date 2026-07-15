@@ -32,6 +32,8 @@ static float Desired_yaw = 0.0f;          /* 期望 yaw 角度, 连续 deg, 不�
 static float yaw_meas_cont = 0.0f;
 /* 野点防护: 单拍积分增量 > YAW_INTEG_MAX 度/拍 则丢掉当拍 */
 #define YAW_INTEG_MAX_PER_STEP   5.0f
+/* yaw 杆 LPF (与 MiniFly ctrlValLpf.yaw 相同思路): 松手后平滑衰减, 避免 Desired_yaw 突停 */
+static float lpf_stick_yaw = 0.0f;
 static float target_angle_pitch = 0.0f;
 static float target_angle_roll = 0.0f;
 float debug_xy_velocity_pid_count = 0.0f;
@@ -363,17 +365,15 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
         }
         /* 野点保护: 单拍增量过大则丢掉, 避免 sensor 跳变污染积分 */
 
-        float stick = -target->angle.yaw;
+        float raw_stick = -target->angle.yaw;
+        /* LPF 平滑杆量 (与 MiniFly commander.c:117 ctrlValLpf.yaw 思路一致).
+           alpha=0.1 @250Hz → τ≈38ms, MiniFly α=0.2 @100Hz → τ≈45ms, 接近. */
+        lpf_stick_yaw += (raw_stick - lpf_stick_yaw) * 0.1f;
 
-        /* MiniFly 隐式锁角: 杆回中 → 角速度=0 → Desired_yaw 不再变 → 角度环
-           自然把 yaw_meas_cont 维持在当前值. 不再需要 isAdjustingYaw 状态机. */
-        if (fabsf(stick) > YAW_DEADBAND)
+        if (fabsf(lpf_stick_yaw) > YAW_DEADBAND)
         {
-            /* 杆偏: 按比例累加目标角度 (deg) = 期望角速度 (deg/s) * dt.
-               效果与 MiniFly attitudeDesired.yaw += setpoint->yaw / ANGEL_PID_RATE 相同. */
-            Desired_yaw += (stick / 100.0f) * YAW_MAX_RATE * ANGEL_PID_DT;
+            Desired_yaw += (lpf_stick_yaw / 100.0f) * YAW_MAX_RATE * ANGEL_PID_DT;
         }
-        /* else: 杆回中, 角速度指令=0, Desired_yaw 不变 → 锁角, 啥都不做 */
 
         // LOG_DEBUG("desire-yaw:%.2f",Desired_yaw);
         // 角度环
