@@ -48,8 +48,15 @@ void CommanderPersist_SaveServoMode(uint8_t servoMode);
 void setCommanderKeyFlight(bool set);
 bool getCommanderKeyFlight(void);
 
+/* 边沿检测 —— 由 Control_Task / commanderGetSetpoint 消费后自动清零 */
+bool consumeKeyFlightRising(void);
+bool consumeKeyFlightFalling(void);
+
 void setCommanderKeyland(bool set);
 bool getCommanderKeyland(void);
+
+bool consumeKeyLandRising(void);
+bool consumeKeyLandFalling(void);
 
 void setCommanderFlightmode(bool set);
 void setCommanderEmerStop(bool set);

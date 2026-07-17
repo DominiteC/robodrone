@@ -5,8 +5,6 @@
  */
 #include "commander.h"
 #include "C_code_Log.h"
-#include "control.h"
-#include "PIDcontroller.h"
 #include "position.h"
 #include "AT24Cxx.h"
 #include "alarm.h"
@@ -53,6 +51,12 @@ static uint16_t maxAccZOverCnt = 0;/* 超过阈值持续计数，避免单帧抖
 static uint16_t maxAccZWinCnt = 0; /* 跟踪窗口计数器，每 200ms 重置一次 maxAccZ */
 
 static commanderBits_t commander;
+
+/* 边沿标志：setter 置位，consumer 消费后清零 */
+static bool keyFlightRising  = false;
+static bool keyFlightFalling = false;
+static bool keyLandRising    = false;
+static bool keyLandFalling   = false;
 
 static void CommanderPersist_EnsureMagic(void)
 {
@@ -254,6 +258,22 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 		commander.keyLand = false;
 	}
 	state->isRCLocked = (isRCLocked || safetyLatched);
+
+	/* 消费边沿：commander 内部状态复位（PID/position 复位在 Control_Task） */
+	if (consumeKeyFlightRising())
+	{
+		minAccZ = 0.f;
+		maxAccZ = 0.f;
+		maxAccZOverCnt = 0;
+		maxAccZWinCnt = 0;
+		initHigh = false;
+		xyHoldActive = false;
+	}
+	if (consumeKeyLandRising())
+	{
+		xyHoldActive = false;
+	}
+
 	if (commander.attitudeMode == MODE_WALK || commander.attitudeMode == MODE_WALK_45)
 	{
 		float thr = data.throttle;
@@ -589,22 +609,15 @@ void setCommanderKeyFlight(bool set)
 	if (commander.keyFlight != set)
 	{
 		commander.keyFlight = set;
-		if(set == true)	/* 一键起飞，清零PID积分和最大最小值 */
+		if (set)
 		{
-			ResetFlightControlPIDs();
-				position_ResetXY();
-
-			minAccZ = 0.f;
-			maxAccZ = 0.f;
-			maxAccZOverCnt = 0;
-			maxAccZWinCnt = 0;
-			initHigh = false;
-			xyHoldActive = false;
+			keyFlightRising  = true;
+			keyFlightFalling = false;
 		}
-		else	/*一键停机，清零PID积分*/
+		else
 		{
-			ResetFlightControlPIDs();
-			xyHoldActive = false;
+			keyFlightFalling = true;
+			keyFlightRising  = false;
 		}
 	}
 }
@@ -620,11 +633,52 @@ bool getCommanderKeyFlight(void)
  */
 void setCommanderKeyland(bool set)
 {
-	commander.keyLand = set;
+	if (commander.keyLand != set)
+	{
+		commander.keyLand = set;
+		if (set)
+		{
+			keyLandRising  = true;
+			keyLandFalling = false;
+		}
+		else
+		{
+			keyLandFalling = true;
+			keyLandRising  = false;
+		}
+	}
 }
 bool getCommanderKeyland(void)
 {
 	return commander.keyLand;
+}
+
+bool consumeKeyFlightRising(void)
+{
+	bool v = keyFlightRising;
+	keyFlightRising = false;
+	return v;
+}
+
+bool consumeKeyFlightFalling(void)
+{
+	bool v = keyFlightFalling;
+	keyFlightFalling = false;
+	return v;
+}
+
+bool consumeKeyLandRising(void)
+{
+	bool v = keyLandRising;
+	keyLandRising = false;
+	return v;
+}
+
+bool consumeKeyLandFalling(void)
+{
+	bool v = keyLandFalling;
+	keyLandFalling = false;
+	return v;
 }
 
 void setCommanderFlightmode(bool set)

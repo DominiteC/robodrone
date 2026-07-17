@@ -7,6 +7,7 @@
 #include <math.h>
 #include "remotedata.h"
 #include "commander.h"
+#include "position.h"
 #include "servo.h"
 #include "watchdog_guard.h"
 #include "log.h"
@@ -139,6 +140,17 @@ void Control_Task(void *param)
     TickType_t lastWakeTime = xTaskGetTickCount();
     while(1)
     {
+        /* 消费 commander 边沿：PID/position 复位（原在 setter 内的副作用） */
+        if (consumeKeyFlightRising())
+        {
+            ResetFlightControlPIDs();
+            position_ResetXY();
+        }
+        if (consumeKeyLandRising())
+        {
+            ResetFlightControlPIDs();
+        }
+
         // 读取陀螺仪和光流数据
         WatchdogGuard_ControlHeartbeat();
         refreshState(&state);
