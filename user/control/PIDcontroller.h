@@ -34,7 +34,9 @@
 
 // 若希望使用多个环节的优化，这样就行：Integral_Limit |Trapezoid_Intergral|...|...
 
-/* PID结构体 */
+/* ── ⚠️ 外部代码禁止直接读写 PIDInstance 字段 ──
+ * 读运行状态请用 pid_dump(), 读配置参数请用 pid_get_config(),
+ * 写配置参数请用 pid_set_config(). 违反此约定会导致并发不安全。 */
 typedef struct
 {
     //---------------------------------- init config block
@@ -105,6 +107,22 @@ typedef struct // config parameter
 } PID_Init_Config_s;
 
 /**
+ * @brief PID 运行状态快照，用于调试/遥测，不包含配置参数。
+ * @note  外部代码通过 pid_dump() 获取原子快照，禁止直接读 PIDInstance 内部字段。
+ */
+typedef struct
+{
+    float Output;
+    float Pout;
+    float Iout;
+    float Dout;
+    float ITerm;
+    float Err;
+    float Measure;
+    float Ref;
+} PIDDump;
+
+/**
  * @brief 初始化PID实例
  * @todo 待修改为统一的PIDRegister风格
  * @param pid    PID实例指针
@@ -128,6 +146,27 @@ float PIDCalculate(PIDInstance *pid, float measure, float ref);
 void PID_ClearIntegral(PIDInstance *pid);
 
 void PID_Reset(PIDInstance *pid);
+
+/**
+ * @brief 获取 PID 运行状态快照（调试/遥测用）
+ * @param pid  PID 实例指针
+ * @param out  快照输出
+ */
+void pid_dump(const PIDInstance *pid, PIDDump *out);
+
+/**
+ * @brief 读取 PID 配置参数（Kp/Ki/Kd 等），不含运行状态
+ * @param pid  PID 实例指针
+ * @param out  配置输出
+ */
+void pid_get_config(const PIDInstance *pid, PID_Init_Config_s *out);
+
+/**
+ * @brief 写入 PID 配置参数。调用侧需确保不在 PIDCalculate 并发上下文。
+ * @param pid  PID 实例指针
+ * @param cfg  新配置
+ */
+void pid_set_config(PIDInstance *pid, const PID_Init_Config_s *cfg);
 
 /**
  * @brief 获得时间间隔

@@ -222,7 +222,7 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 
     // LOG_INFO("thr:%.2f,roll:%.2f,pit:%.2f,yaw:%.2f",throttle,pid_roll_rate.Output,pid_pitch_rate.Output,pid_yaw_rate.Output);
     // 设置电调输出
-    if (throttle > 2)
+    if (throttle > 5)
     {
 			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
 			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
@@ -230,10 +230,10 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
 			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
 
 			 // 添加最小油门限制，确保电机不会停转
-			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 80);
-			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 0, 80);
-			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 0, 80);
-			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 0, 80);
+			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 90);
+			 ctrl->Esc_Percent_2 = limit(ctrl->Esc_Percent_2, 0, 90);
+			 ctrl->Esc_Percent_3 = limit(ctrl->Esc_Percent_3, 0, 90);
+			 ctrl->Esc_Percent_4 = limit(ctrl->Esc_Percent_4, 0, 90);
 //				ctrl->Esc_Percent_2 = 10;
 
         // LOG_DEBUG("esc:%.2f,%.2f,%.2f,%.2f",ctrl->Esc_Percent_1, ctrl->Esc_Percent_2, ctrl->Esc_Percent_3, ctrl->Esc_Percent_4);
@@ -461,7 +461,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
     static uint16_t rampCnt = 0;
 
     #define TAKEOFF_START_THRUST  20.0f
-    #define LAND_END_THRUST       45.0f
+    #define LAND_END_THRUST       40.0f
     #define TAKEOFF_RAMP_CYCLE    500     /* 2秒 @250Hz */
     #define LAND_RAMP_CYCLE       1250    /* 5秒 @250Hz */
 
@@ -489,6 +489,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
     {
         thrustLpf = 0;
         thrustRaw = 0;
+			
         baseThrust = 0;
         rampCnt = 0;
         PID_ClearIntegral(&pid_height_position);

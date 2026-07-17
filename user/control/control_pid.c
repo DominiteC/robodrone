@@ -10,7 +10,7 @@
 PID_Init_Config_s pid_height_position_config = {
     .Kp = 1.5f,
     .Ki = 0.0f,
-    .Kd = 0.005f,
+    .Kd = 0.00f,
     .MaxOut = 80.0f, //限幅
     .DeadBand = 0,//差值大于5才进行PID调节，防止抖动
     .DeadBandOutputMode = PID_DEADBAND_OUTPUT_ZERO,

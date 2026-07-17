@@ -244,3 +244,69 @@ void PID_Reset(PIDInstance *pid)
     pid->Last_ITerm = 0;
     GetDeltaT(&pid->lastTime);
 }
+
+/**
+ * @brief 获取 PID 运行状态快照（调试/遥测用）
+ * @param pid  PID 实例指针
+ * @param out  快照输出
+ * @note  纯值拷贝，不加锁。在单任务控制场景下并发安全。
+ *        若未来改为多任务控制，需要在调用侧统一加临界区。
+ */
+void pid_dump(const PIDInstance *pid, PIDDump *out)
+{
+    if (!pid || !out) return;
+    out->Output  = pid->Output;
+    out->Pout    = pid->Pout;
+    out->Iout    = pid->Iout;
+    out->Dout    = pid->Dout;
+    out->ITerm   = pid->ITerm;
+    out->Err     = pid->Err;
+    out->Measure = pid->Measure;
+    out->Ref     = pid->Ref;
+}
+
+/**
+ * @brief 读取 PID 配置参数（Kp/Ki/Kd 等），不含运行状态
+ */
+void pid_get_config(const PIDInstance *pid, PID_Init_Config_s *out)
+{
+    if (!pid || !out) return;
+    out->Kp   = pid->Kp;
+    out->Ki   = pid->Ki;
+    out->Kd   = pid->Kd;
+    out->MaxOut = pid->MaxOut;
+    out->DeadBand = pid->DeadBand;
+    out->DeadBandOutputMode = pid->DeadBandOutputMode;
+    out->Improve = pid->Improve;
+    out->IntegralLimit = pid->IntegralLimit;
+    out->CoefA = pid->CoefA;
+    out->CoefB = pid->CoefB;
+    out->Output_LPF_RC = pid->Output_LPF_RC;
+    out->Derivative_LPF_RC = pid->Derivative_LPF_RC;
+    out->Intergral_Separate = pid->Intergral_Separate;
+    out->DeltaT_Limit_Max = pid->DeltaT_Limit_Max;
+    out->DeltaT_Limit_Min = pid->DeltaT_Limit_Min;
+}
+
+/**
+ * @brief 写入 PID 配置参数。调用侧需确保不在 PIDCalculate 并发上下文。
+ */
+void pid_set_config(PIDInstance *pid, const PID_Init_Config_s *cfg)
+{
+    if (!pid || !cfg) return;
+    pid->Kp   = cfg->Kp;
+    pid->Ki   = cfg->Ki;
+    pid->Kd   = cfg->Kd;
+    pid->MaxOut = cfg->MaxOut;
+    pid->DeadBand = cfg->DeadBand;
+    pid->DeadBandOutputMode = cfg->DeadBandOutputMode;
+    pid->Improve = cfg->Improve;
+    pid->IntegralLimit = cfg->IntegralLimit;
+    pid->CoefA = cfg->CoefA;
+    pid->CoefB = cfg->CoefB;
+    pid->Output_LPF_RC = cfg->Output_LPF_RC;
+    pid->Derivative_LPF_RC = cfg->Derivative_LPF_RC;
+    pid->Intergral_Separate = cfg->Intergral_Separate;
+    pid->DeltaT_Limit_Max = cfg->DeltaT_Limit_Max;
+    pid->DeltaT_Limit_Min = cfg->DeltaT_Limit_Min;
+}

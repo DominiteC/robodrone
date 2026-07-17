@@ -1,6 +1,12 @@
 #ifndef __CONTROL_PID_H__
 #define __CONTROL_PID_H__
 
+/*
+ * 控制 PID 模块集中维护飞控 PID 实例和初始化入口。
+ * PID 访问规范：外部代码通过 pid_dump/pid_get_config/pid_set_config 访问 PID，
+ *   禁止直接读写 PIDInstance 字段。
+ */
+
 #include "PIDcontroller.h"
 
 /*

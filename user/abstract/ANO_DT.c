@@ -13,6 +13,7 @@
 #include "gyro.h"
 #include "usart_send.h"
 #include "control.h"
+#include "PIDcontroller.h"
 #include "usart_port.h"
 #include "IT_Callback.h"
 #include "commander.h"
@@ -121,12 +122,16 @@ void ANO_DT_Data_Exchange(void *param)
 		if(f.send_senser)
 		{
 			f.send_senser = 0;
-			int16_t acc_x = stcAcc.a[0];
-			int16_t acc_y = stcAcc.a[1];
-			int16_t acc_z = stcAcc.a[2];
-			int16_t gyro_x = stcGyro.w[0];
-			int16_t gyro_y = stcGyro.w[1];
-			int16_t gyro_z = stcGyro.w[2];
+			float_acc acc;
+			float_gyro gyr;
+			gyro_getAcc(&acc);
+			gyro_getAngularVelocity(&gyr);
+			int16_t acc_x = (int16_t)acc.x;
+			int16_t acc_y = (int16_t)acc.y;
+			int16_t acc_z = (int16_t)acc.z;
+			int16_t gyro_x = (int16_t)gyr.x;
+			int16_t gyro_y = (int16_t)gyr.y;
+			int16_t gyro_z = (int16_t)gyr.z;
 			int16_t mag_x = stcMag.h[0];
 			int16_t mag_y = stcMag.h[1];
 			int16_t mag_z = stcMag.h[2];
@@ -143,12 +148,14 @@ void ANO_DT_Data_Exchange(void *param)
 
 			// 保护PID数据访问
 			
-			int16_t gyro_z_val = stcGyro.w[2];
-			float pid_yaw_rate_err = pid_yaw_rate.Err;
-			float pid_yaw_rate_out = pid_yaw_rate.Output;
-			float pid_yaw_rate_pout = pid_yaw_rate.Pout;
-			float pid_yaw_rate_iout = pid_yaw_rate.Iout;
-			float pid_yaw_rate_dout = pid_yaw_rate.Dout;
+			int16_t gyro_z_val = (int16_t)gyr.z;
+			PIDDump dump_yaw_rate;
+			pid_dump(&pid_yaw_rate, &dump_yaw_rate);
+			float pid_yaw_rate_err = dump_yaw_rate.Err;
+			float pid_yaw_rate_out = dump_yaw_rate.Output;
+			float pid_yaw_rate_pout = dump_yaw_rate.Pout;
+			float pid_yaw_rate_iout = dump_yaw_rate.Iout;
+			float pid_yaw_rate_dout = dump_yaw_rate.Dout;
 			
 			
 			Data_Send_AngleRate(gyro_z_val, RC_Control.angle.yaw/10, pid_yaw_rate_err, pid_yaw_rate_out,
@@ -158,9 +165,13 @@ void ANO_DT_Data_Exchange(void *param)
 		if(f.send_rcdata)
 		{
 			f.send_rcdata = 0;
+			PIDDump dump_yaw_rate;
+			pid_dump(&pid_yaw_rate, &dump_yaw_rate);
+			PIDDump dump_yaw_angle;
+			pid_dump(&pid_yaw_angle, &dump_yaw_angle);
 ANO_DT_Send_RCDataFloat(
-												pid_yaw_rate.Output,        // 1-ESC1 percent
-												pid_yaw_rate.Err,        // 2-ESC2 percent
+												dump_yaw_rate.Output,        // 1-ESC1 percent
+												dump_yaw_rate.Err,        // 2-ESC2 percent
                         debugEsc.Esc_Percent_3,        // 3-ESC3 percent
 												debugEsc.Esc_Percent_4,        // 4-ESC4 percent
                         state.position.y,           // 5-state Y position cm
@@ -168,7 +179,7 @@ ANO_DT_Send_RCDataFloat(
                         debug_target_angle_roll,      // 7-target roll angle
                         state.velocity.x,           // 8-X velocity cm/s
                         state.velocity.y,           // 9-Y velocity cm/s
-                        pid_yaw_angle.Err,              // 10-gyro Z
+                        dump_yaw_angle.Err,              // 10-gyro Z
                         debug_desired_yaw,           // 11-展开后目标 yaw 角度（连续值）
                         debug_yaw_meas_cont	         // 12-飞控积分 yaw
                         );
@@ -190,9 +201,13 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid1 = 0;
 			
-			ANO_DT_Send_PID(1,pid_x_velocity.Kp,pid_x_velocity.Ki,pid_x_velocity.Kd,
-									pid_y_velocity.Kp,pid_y_velocity.Ki,pid_y_velocity.Kd,
-									pid_z_velocity.Kp,pid_z_velocity.Ki,pid_z_velocity.Kd);
+			PID_Init_Config_s cfg_vx, cfg_vy, cfg_vz;
+			pid_get_config(&pid_x_velocity, &cfg_vx);
+			pid_get_config(&pid_y_velocity, &cfg_vy);
+			pid_get_config(&pid_z_velocity, &cfg_vz);
+			ANO_DT_Send_PID(1,cfg_vx.Kp,cfg_vx.Ki,cfg_vx.Kd,
+										cfg_vy.Kp,cfg_vy.Ki,cfg_vy.Kd,
+										cfg_vz.Kp,cfg_vz.Ki,cfg_vz.Kd);
 			
 		}	
 /////////////////////////////////////////////////////////////////////////////////////
@@ -200,9 +215,13 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid2 = 0;
 			
-			ANO_DT_Send_PID(2,pid_roll_angle.Kp,pid_roll_angle.Ki,pid_roll_angle.Kd,
-										pid_pitch_angle.Kp,pid_pitch_angle.Ki,pid_pitch_angle.Kd,
-										pid_yaw_angle.Kp,pid_yaw_angle.Ki,pid_yaw_angle.Kd);
+			PID_Init_Config_s cfg_ra, cfg_pa, cfg_ya;
+			pid_get_config(&pid_roll_angle, &cfg_ra);
+			pid_get_config(&pid_pitch_angle, &cfg_pa);
+			pid_get_config(&pid_yaw_angle, &cfg_ya);
+			ANO_DT_Send_PID(2,cfg_ra.Kp,cfg_ra.Ki,cfg_ra.Kd,
+										cfg_pa.Kp,cfg_pa.Ki,cfg_pa.Kd,
+										cfg_ya.Kp,cfg_ya.Ki,cfg_ya.Kd);
 			
 		}
 /////////////////////////////////////////////////////////////////////////////////////
@@ -210,9 +229,13 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid3 = 0;
 			
-			ANO_DT_Send_PID(3,pid_roll_rate.Kp,pid_roll_rate.Ki,pid_roll_rate.Kd,
-										pid_pitch_rate.Kp,pid_pitch_rate.Ki,pid_pitch_rate.Kd,
-										pid_yaw_rate.Kp,pid_yaw_rate.Ki,pid_yaw_rate.Kd);
+			PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
+			pid_get_config(&pid_roll_rate, &cfg_rr);
+			pid_get_config(&pid_pitch_rate, &cfg_pr);
+			pid_get_config(&pid_yaw_rate, &cfg_yr);
+			ANO_DT_Send_PID(3,cfg_rr.Kp,cfg_rr.Ki,cfg_rr.Kd,
+										cfg_pr.Kp,cfg_pr.Ki,cfg_pr.Kd,
+										cfg_yr.Kp,cfg_yr.Ki,cfg_yr.Kd);
 			
 		}
 /////////////////////////////////////////////////////////////////////////////////////
@@ -220,7 +243,9 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid4 = 0;
 
-			ANO_DT_Send_PID(4,pid_height_position.Kp,pid_height_position.Ki,pid_height_position.Kd,
+			PID_Init_Config_s cfg_hp;
+			pid_get_config(&pid_height_position, &cfg_hp);
+			ANO_DT_Send_PID(4,cfg_hp.Kp,cfg_hp.Ki,cfg_hp.Kd,
 										0,0,0,0,0,0);
 
 		}
@@ -229,8 +254,11 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid5 = 0;
 
-			ANO_DT_Send_PID(5,pid_x_position.Kp,pid_x_position.Ki,pid_x_position.Kd,
-						pid_y_position.Kp,pid_y_position.Ki,pid_y_position.Kd,
+			PID_Init_Config_s cfg_xp, cfg_yp;
+			pid_get_config(&pid_x_position, &cfg_xp);
+			pid_get_config(&pid_y_position, &cfg_yp);
+			ANO_DT_Send_PID(5,cfg_xp.Kp,cfg_xp.Ki,cfg_xp.Kd,
+						cfg_yp.Kp,cfg_yp.Ki,cfg_yp.Kd,
 						0,0,0);
 		}
 /////////////////////////////////////////////////////////////////////////////////////
@@ -238,32 +266,32 @@ ANO_DT_Send_RCDataFloat(
 		{
 			f.send_pid_debug = 0;
 
-			// 进入临界区保护全局数据访问
-			taskENTER_CRITICAL();
-
 			// 获取实际欧拉角（直接读取传感器融合结果，不依赖PID计算）
 			float_angle angle;
 			gyro_getAngle(&angle);
 
+			PIDDump dump_roll_angle, dump_pitch_angle, dump_roll_rate, dump_pitch_rate;
+			pid_dump(&pid_roll_angle, &dump_roll_angle);
+			pid_dump(&pid_pitch_angle, &dump_pitch_angle);
+			pid_dump(&pid_roll_rate, &dump_roll_rate);
+			pid_dump(&pid_pitch_rate, &dump_pitch_rate);
 // Roll 数据
-float			roll_angle_target = pid_roll_angle.Ref;
+float			roll_angle_target = dump_roll_angle.Ref;
 float			roll_angle_measure = angle.roll;          // 直接用传感器融合结果
-float			roll_rate_target = pid_roll_angle.Output;
-float			roll_rate_measure = pid_roll_rate.Measure;
+float			roll_rate_target = dump_roll_angle.Output;
+float			roll_rate_measure = dump_roll_rate.Measure;
 		
 			// Pitch 数据
-float			pitch_angle_target = pid_pitch_angle.Ref;
+float			pitch_angle_target = dump_pitch_angle.Ref;
 float			pitch_angle_measure = angle.pitch;         // 直接用传感器融合结果
-float			pitch_rate_target = pid_pitch_angle.Output;
-float			pitch_rate_measure = pid_pitch_rate.Measure;
-			// 退出临界区
-			taskEXIT_CRITICAL();
+float			pitch_rate_target = dump_pitch_angle.Output;
+float			pitch_rate_measure = dump_pitch_rate.Measure;
 
 			// 发送 0xF3 帧 - Roll/Pitch 角度和角速度
 			ANO_DT_Send_PID_Debug(0xF3,
 				target.angle.roll, roll_angle_measure, roll_rate_target, roll_rate_measure,
 				target.angle.pitch, pitch_angle_measure, pitch_rate_target, pitch_rate_measure,
-				pid_roll_rate.Output, pid_pitch_rate.Output, pid_roll_rate.Err, pid_pitch_rate.Err);
+				dump_roll_rate.Output, dump_pitch_rate.Output, dump_roll_rate.Err, dump_pitch_rate.Err);
 		}
 /////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////
@@ -406,65 +434,95 @@ void ANO_DT_Data_Receive_Anl(uint8_t *data_buf,uint8_t num)
 
 	if(*(data_buf+2)==0X10)								//PID1
     {
-        pid_x_velocity.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        pid_x_velocity.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        pid_x_velocity.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        pid_y_velocity.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
-        pid_y_velocity.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
-        pid_y_velocity.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
-        pid_z_velocity.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
-        pid_z_velocity.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
-        pid_z_velocity.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        PID_Init_Config_s cfg_vx, cfg_vy, cfg_vz;
+        pid_get_config(&pid_x_velocity, &cfg_vx);
+        pid_get_config(&pid_y_velocity, &cfg_vy);
+        pid_get_config(&pid_z_velocity, &cfg_vz);
+        cfg_vx.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_vx.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_vx.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_vy.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_vy.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_vy.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_vz.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_vz.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_vz.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_x_velocity, &cfg_vx);
+        pid_set_config(&pid_y_velocity, &cfg_vy);
+        pid_set_config(&pid_z_velocity, &cfg_vz);
         ANO_DT_Send_Check(*(data_buf+2),sum);
 //				Param_SavePID();
     }
     if(*(data_buf+2)==0X11)								//PID2
     {
-        pid_roll_angle.Kp 	= 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        pid_roll_angle.Ki 	= 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        pid_roll_angle.Kd 	= 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        pid_pitch_angle.Kp 	= 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
-        pid_pitch_angle.Ki 	= 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
-        pid_pitch_angle.Kd 	= 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
-        pid_yaw_angle.Kp	  = 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
-        pid_yaw_angle.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
-        pid_yaw_angle.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        PID_Init_Config_s cfg_ra, cfg_pa, cfg_ya;
+        pid_get_config(&pid_roll_angle, &cfg_ra);
+        pid_get_config(&pid_pitch_angle, &cfg_pa);
+        pid_get_config(&pid_yaw_angle, &cfg_ya);
+        cfg_ra.Kp 	= 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_ra.Ki 	= 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_ra.Kd 	= 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_pa.Kp 	= 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_pa.Ki 	= 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_pa.Kd 	= 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_ya.Kp	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_ya.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_ya.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_roll_angle, &cfg_ra);
+        pid_set_config(&pid_pitch_angle, &cfg_pa);
+        pid_set_config(&pid_yaw_angle, &cfg_ya);
         ANO_DT_Send_Check(*(data_buf+2),sum);
 //				Param_SavePID();
     }
     if(*(data_buf+2)==0X12)								//PID3
     {	
-        pid_roll_rate.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        pid_roll_rate.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        pid_roll_rate.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        pid_pitch_rate.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
-        pid_pitch_rate.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
-        pid_pitch_rate.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
-        pid_yaw_rate.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
-        pid_yaw_rate.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
-        pid_yaw_rate.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
+        pid_get_config(&pid_roll_rate, &cfg_rr);
+        pid_get_config(&pid_pitch_rate, &cfg_pr);
+        pid_get_config(&pid_yaw_rate, &cfg_yr);
+        cfg_rr.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_rr.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_rr.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_pr.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_pr.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_pr.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_yr.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_yr.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_yr.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_roll_rate, &cfg_rr);
+        pid_set_config(&pid_pitch_rate, &cfg_pr);
+        pid_set_config(&pid_yaw_rate, &cfg_yr);
         ANO_DT_Send_Check(*(data_buf+2),sum);
 //				Param_SavePID();
     }
 	if(*(data_buf+2)==0X13)								//PID4
 	{
-        pid_height_position.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        pid_height_position.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        pid_height_position.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        PID_Init_Config_s cfg_hp;
+        pid_get_config(&pid_height_position, &cfg_hp);
+        cfg_hp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_hp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_hp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        pid_set_config(&pid_height_position, &cfg_hp);
 		ANO_DT_Send_Check(*(data_buf+2),sum);
 	}
 	if(*(data_buf+2)==0X14)								//PID5
 	{
-		pid_x_position.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-		pid_x_position.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-		pid_x_position.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        PID_Init_Config_s cfg_xp;
+        pid_get_config(&pid_x_position, &cfg_xp);
+		cfg_xp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+		cfg_xp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+		cfg_xp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        pid_set_config(&pid_x_position, &cfg_xp);
 		ANO_DT_Send_Check(*(data_buf+2),sum);
 	}
 	if(*(data_buf+2)==0X15)								//PID6
 	{
-		pid_y_position.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-		pid_y_position.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-		pid_y_position.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        PID_Init_Config_s cfg_yp;
+        pid_get_config(&pid_y_position, &cfg_yp);
+		cfg_yp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+		cfg_yp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+		cfg_yp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        pid_set_config(&pid_y_position, &cfg_yp);
 		ANO_DT_Send_Check(*(data_buf+2),sum);
 	}
 
