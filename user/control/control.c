@@ -393,6 +393,12 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
         {
             Desired_yaw += (lpf_stick_yaw / 100.0f) * YAW_MAX_RATE * ANGEL_PID_DT;
         }
+        else
+        {
+            /* 松手锁角 (MiniFly Kp=20.0 不需要, 我们 Kp=2.5 拉不回惯性过冲).
+               LPF 衰减进死区后 Desired_yaw = yaw_meas_cont, 角度误差归 0. */
+            Desired_yaw = yaw_meas_cont;
+        }
 
         // LOG_DEBUG("desire-yaw:%.2f",Desired_yaw);
         // 角度环
