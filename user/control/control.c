@@ -64,11 +64,13 @@ static float wrapYawDisplay(float yaw);
 
 static void ResetYawState(void)
 {
-    /* 飞控内自积分: 上电默认 0 (与 MiniFly 一致, q0=1,q1=q2=q3=0).
-       不再从 JY901P 内部融合的 state.angle.yaw 取初值, 避免被磁干扰影响. */
-    Desired_yaw = 0.0f;
-    yaw_meas_cont = 0.0f;
+    /* 只清 Desired_yaw 和角度环 PID 积分 (与 MiniFly attitudeControllerResetRollAttitudePID 等价).
+       yaw_meas_cont 不清: 它是上电后 0 偏扣除+积分的连续角, 跨飞行次数累计,
+       清零会导致第二次起飞瞬间飞机从大角度突然变 0 → 大自旋. */
+    Desired_yaw = yaw_meas_cont;
     debug_target_angle_yaw = wrapYawDisplay(Desired_yaw);
+    PID_ClearIntegral(&pid_yaw_angle);
+    PID_ClearIntegral(&pid_yaw_rate);
 }
 
 /* Ground yaw unfold debug - independent from flight control, tracks yaw continuously */
@@ -236,10 +238,10 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     // 设置电调输出
     if (throttle > 5)
     {
-			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
-			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
-			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
-			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+//			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
 
 			 // 添加最小油门限制，确保电机不会停转
 			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 90);
