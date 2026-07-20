@@ -33,7 +33,7 @@ void safeCheck(MotorCtrl* ctrl, state_t* state)
         return;
     }
 
-    if (getCommanderAttitudeMode() == MODE_AIRPLANE && (fabsf(state->angle.roll) > 35 || fabsf(state->angle.pitch) > 35))
+    if (getCommanderAttitudeMode() == MODE_AIRPLANE && (fabsf(state->angle.roll) > 40 || fabsf(state->angle.pitch) > 40))
     {
         if (!safety_triggered)
         {

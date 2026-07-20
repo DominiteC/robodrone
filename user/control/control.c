@@ -64,10 +64,12 @@ static float wrapYawDisplay(float yaw);
 
 static void ResetYawState(void)
 {
-    /* 只清 Desired_yaw 和角度环 PID 积分 (与 MiniFly attitudeControllerResetRollAttitudePID 等价).
-       yaw_meas_cont 不清: 它是上电后 0 偏扣除+积分的连续角, 跨飞行次数累计,
-       清零会导致第二次起飞瞬间飞机从大角度突然变 0 → 大自旋. */
-    Desired_yaw = yaw_meas_cont;
+    /* 起飞/降落瞬间把 yaw_meas_cont 重新定义成 0.
+       理由: 上电后累积的角度反映"机上电后绕了多少",但用户可能在两次飞行之间手动
+       移动飞机, 实际航向已经变了. 起飞瞬间归零 → 新航向以起飞时为准.
+       代价: 两次起飞之间 yaw_meas_cont 不连续, 但每次起飞都从 0 开始安全. */
+    Desired_yaw = 0.0f;
+    yaw_meas_cont = 0.0f;
     debug_target_angle_yaw = wrapYawDisplay(Desired_yaw);
     PID_ClearIntegral(&pid_yaw_angle);
     PID_ClearIntegral(&pid_yaw_rate);
@@ -238,10 +240,10 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     // 设置电调输出
     if (throttle > 5)
     {
-//			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
-//			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_1 = throttle + pid_roll_rate.Output + pid_pitch_rate.Output - pid_yaw_rate.Output;// m3顺(- pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_2 = throttle - pid_roll_rate.Output + pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(- pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_3 = throttle - pid_roll_rate.Output - pid_pitch_rate.Output - pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
+			 ctrl->Esc_Percent_4 = throttle + pid_roll_rate.Output - pid_pitch_rate.Output + pid_yaw_rate.Output;// 		(+ pid_yaw_rate.Output;)
 
 			 // 添加最小油门限制，确保电机不会停转
 			 ctrl->Esc_Percent_1 = limit(ctrl->Esc_Percent_1, 0, 90);
@@ -587,7 +589,7 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick)
 		return 0;
 	}
 
-    return limit(thrustRaw, 20, 70);  // 限制油门上限在70%
+    return limit(thrustRaw, 20, 90);  // 限制油门上限在70%
 }
 
 float getAltholdThrust(void)

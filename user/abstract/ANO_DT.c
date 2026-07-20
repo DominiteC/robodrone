@@ -200,15 +200,15 @@ ANO_DT_Send_RCDataFloat(
 		if(f.send_pid1)
 		{
 			f.send_pid1 = 0;
-			
-			PID_Init_Config_s cfg_vx, cfg_vy, cfg_vz;
-			pid_get_config(&pid_x_velocity, &cfg_vx);
-			pid_get_config(&pid_y_velocity, &cfg_vy);
-			pid_get_config(&pid_z_velocity, &cfg_vz);
-			ANO_DT_Send_PID(1,cfg_vx.Kp,cfg_vx.Ki,cfg_vx.Kd,
-										cfg_vy.Kp,cfg_vy.Ki,cfg_vy.Kd,
-										cfg_vz.Kp,cfg_vz.Ki,cfg_vz.Kd);
-			
+
+			PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
+			pid_get_config(&pid_roll_rate, &cfg_rr);
+			pid_get_config(&pid_pitch_rate, &cfg_pr);
+			pid_get_config(&pid_yaw_rate, &cfg_yr);
+			ANO_DT_Send_PID(1,cfg_rr.Kp,cfg_rr.Ki,cfg_rr.Kd,
+										cfg_pr.Kp,cfg_pr.Ki,cfg_pr.Kd,
+										cfg_yr.Kp,cfg_yr.Ki,cfg_yr.Kd);
+
 		}	
 /////////////////////////////////////////////////////////////////////////////////////
 		if(f.send_pid2)
@@ -228,39 +228,42 @@ ANO_DT_Send_RCDataFloat(
 		if(f.send_pid3)
 		{
 			f.send_pid3 = 0;
-			
-			PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
-			pid_get_config(&pid_roll_rate, &cfg_rr);
-			pid_get_config(&pid_pitch_rate, &cfg_pr);
-			pid_get_config(&pid_yaw_rate, &cfg_yr);
-			ANO_DT_Send_PID(3,cfg_rr.Kp,cfg_rr.Ki,cfg_rr.Kd,
-										cfg_pr.Kp,cfg_pr.Ki,cfg_pr.Kd,
-										cfg_yr.Kp,cfg_yr.Ki,cfg_yr.Kd);
-			
+
+			PID_Init_Config_s cfg_zv, cfg_hp, cfg_xp;
+			pid_get_config(&pid_z_velocity, &cfg_zv);
+			pid_get_config(&pid_height_position, &cfg_hp);
+			pid_get_config(&pid_x_position, &cfg_xp);
+			ANO_DT_Send_PID(3,cfg_zv.Kp,cfg_zv.Ki,cfg_zv.Kd,
+										cfg_hp.Kp,cfg_hp.Ki,cfg_hp.Kd,
+										cfg_xp.Kp,cfg_xp.Ki,cfg_xp.Kd);
+
 		}
 /////////////////////////////////////////////////////////////////////////////////////
 		if(f.send_pid4)
 		{
 			f.send_pid4 = 0;
 
-			PID_Init_Config_s cfg_hp;
-			pid_get_config(&pid_height_position, &cfg_hp);
-			ANO_DT_Send_PID(4,cfg_hp.Kp,cfg_hp.Ki,cfg_hp.Kd,
-										0,0,0,0,0,0);
+			PID_Init_Config_s cfg_yp, cfg_xv, cfg_yv;
+			pid_get_config(&pid_y_position, &cfg_yp);
+			pid_get_config(&pid_x_velocity, &cfg_xv);
+			pid_get_config(&pid_y_velocity, &cfg_yv);
+			ANO_DT_Send_PID(4,cfg_yp.Kp,cfg_yp.Ki,cfg_yp.Kd,
+										cfg_xv.Kp,cfg_xv.Ki,cfg_xv.Kd,
+										cfg_yv.Kp,cfg_yv.Ki,cfg_yv.Kd);
 
 		}
 /////////////////////////////////////////////////////////////////////////////////////
 		if(f.send_pid5)
 		{
 			f.send_pid5 = 0;
-
-			PID_Init_Config_s cfg_xp, cfg_yp;
-			pid_get_config(&pid_x_position, &cfg_xp);
-			pid_get_config(&pid_y_position, &cfg_yp);
-			ANO_DT_Send_PID(5,cfg_xp.Kp,cfg_xp.Ki,cfg_xp.Kd,
-						cfg_yp.Kp,cfg_yp.Ki,cfg_yp.Kd,
-						0,0,0);
+			/* 当前协议布局 PID5 列无对应 PID */
 		}
+/////////////////////////////////////////////////////////////////////////////////////
+	if(f.send_pid6)
+	{
+		f.send_pid6 = 0;
+		/* 当前协议布局 PID6 列无对应 PID */
+	}
 /////////////////////////////////////////////////////////////////////////////////////
 		if(f.send_pid_debug)
 		{
@@ -415,8 +418,6 @@ void ANO_DT_Data_Receive_Anl(uint8_t *data_buf,uint8_t num)
 			f.send_pid2 = 1;
 			f.send_pid3 = 1;
 			f.send_pid4 = 1;
-			f.send_pid5 = 1;
-			f.send_pid6 = 1;
 		}
 		if(*(data_buf+4)==0X02)
 		{
@@ -432,26 +433,25 @@ void ANO_DT_Data_Receive_Anl(uint8_t *data_buf,uint8_t num)
 		}
 	}
 
-	if(*(data_buf+2)==0X10)								//PID1
+		if(*(data_buf+2)==0X10)							//PID1
     {
-        PID_Init_Config_s cfg_vx, cfg_vy, cfg_vz;
-        pid_get_config(&pid_x_velocity, &cfg_vx);
-        pid_get_config(&pid_y_velocity, &cfg_vy);
-        pid_get_config(&pid_z_velocity, &cfg_vz);
-        cfg_vx.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        cfg_vx.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        cfg_vx.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        cfg_vy.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
-        cfg_vy.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
-        cfg_vy.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
-        cfg_vz.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
-        cfg_vz.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
-        cfg_vz.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
-        pid_set_config(&pid_x_velocity, &cfg_vx);
-        pid_set_config(&pid_y_velocity, &cfg_vy);
-        pid_set_config(&pid_z_velocity, &cfg_vz);
+        PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
+        pid_get_config(&pid_roll_rate, &cfg_rr);
+        pid_get_config(&pid_pitch_rate, &cfg_pr);
+        pid_get_config(&pid_yaw_rate, &cfg_yr);
+        cfg_rr.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_rr.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_rr.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_pr.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_pr.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_pr.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_yr.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_yr.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_yr.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_roll_rate, &cfg_rr);
+        pid_set_config(&pid_pitch_rate, &cfg_pr);
+        pid_set_config(&pid_yaw_rate, &cfg_yr);
         ANO_DT_Send_Check(*(data_buf+2),sum);
-//				Param_SavePID();
     }
     if(*(data_buf+2)==0X11)								//PID2
     {
@@ -474,55 +474,53 @@ void ANO_DT_Data_Receive_Anl(uint8_t *data_buf,uint8_t num)
         ANO_DT_Send_Check(*(data_buf+2),sum);
 //				Param_SavePID();
     }
-    if(*(data_buf+2)==0X12)								//PID3
-    {	
-        PID_Init_Config_s cfg_rr, cfg_pr, cfg_yr;
-        pid_get_config(&pid_roll_rate, &cfg_rr);
-        pid_get_config(&pid_pitch_rate, &cfg_pr);
-        pid_get_config(&pid_yaw_rate, &cfg_yr);
-        cfg_rr.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        cfg_rr.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        cfg_rr.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        cfg_pr.Kp = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
-        cfg_pr.Ki = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
-        cfg_pr.Kd = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
-        cfg_yr.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
-        cfg_yr.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
-        cfg_yr.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
-        pid_set_config(&pid_roll_rate, &cfg_rr);
-        pid_set_config(&pid_pitch_rate, &cfg_pr);
-        pid_set_config(&pid_yaw_rate, &cfg_yr);
-        ANO_DT_Send_Check(*(data_buf+2),sum);
-//				Param_SavePID();
-    }
-	if(*(data_buf+2)==0X13)								//PID4
-	{
-        PID_Init_Config_s cfg_hp;
+        if(*(data_buf+2)==0X12)							//PID3
+    {
+        PID_Init_Config_s cfg_zv, cfg_hp, cfg_xp;
+        pid_get_config(&pid_z_velocity, &cfg_zv);
         pid_get_config(&pid_height_position, &cfg_hp);
-        cfg_hp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-        cfg_hp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-        cfg_hp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        pid_set_config(&pid_height_position, &cfg_hp);
-		ANO_DT_Send_Check(*(data_buf+2),sum);
-	}
-	if(*(data_buf+2)==0X14)								//PID5
-	{
-        PID_Init_Config_s cfg_xp;
         pid_get_config(&pid_x_position, &cfg_xp);
-		cfg_xp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-		cfg_xp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-		cfg_xp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_zv.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_zv.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_zv.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_hp.Kp  = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_hp.Ki  = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_hp.Kd  = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_xp.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_xp.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_xp.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_z_velocity, &cfg_zv);
+        pid_set_config(&pid_height_position, &cfg_hp);
         pid_set_config(&pid_x_position, &cfg_xp);
+        ANO_DT_Send_Check(*(data_buf+2),sum);
+    }
+		if(*(data_buf+2)==0X13)							//PID4
+	{
+        PID_Init_Config_s cfg_yp, cfg_xv, cfg_yv;
+        pid_get_config(&pid_y_position, &cfg_yp);
+        pid_get_config(&pid_x_velocity, &cfg_xv);
+        pid_get_config(&pid_y_velocity, &cfg_yv);
+        cfg_yp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
+        cfg_yp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
+        cfg_yp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
+        cfg_xv.Kp  = 0.001*( (vint16_t)(*(data_buf+10)<<8)|*(data_buf+11) );
+        cfg_xv.Ki  = 0.001*( (vint16_t)(*(data_buf+12)<<8)|*(data_buf+13) );
+        cfg_xv.Kd  = 0.001*( (vint16_t)(*(data_buf+14)<<8)|*(data_buf+15) );
+        cfg_yv.Kp 	= 0.001*( (vint16_t)(*(data_buf+16)<<8)|*(data_buf+17) );
+        cfg_yv.Ki 	= 0.001*( (vint16_t)(*(data_buf+18)<<8)|*(data_buf+19) );
+        cfg_yv.Kd 	= 0.001*( (vint16_t)(*(data_buf+20)<<8)|*(data_buf+21) );
+        pid_set_config(&pid_y_position, &cfg_yp);
+        pid_set_config(&pid_x_velocity, &cfg_xv);
+        pid_set_config(&pid_y_velocity, &cfg_yv);
 		ANO_DT_Send_Check(*(data_buf+2),sum);
 	}
-	if(*(data_buf+2)==0X15)								//PID6
+		if(*(data_buf+2)==0X14)							//PID5 (空)
 	{
-        PID_Init_Config_s cfg_yp;
-        pid_get_config(&pid_y_position, &cfg_yp);
-		cfg_yp.Kp  = 0.001*( (vint16_t)(*(data_buf+4)<<8)|*(data_buf+5) );
-		cfg_yp.Ki  = 0.001*( (vint16_t)(*(data_buf+6)<<8)|*(data_buf+7) );
-		cfg_yp.Kd  = 0.001*( (vint16_t)(*(data_buf+8)<<8)|*(data_buf+9) );
-        pid_set_config(&pid_y_position, &cfg_yp);
+		/* 当前协议布局 PID5 列无对应 PID，地面站若发此帧仅 ACK 即可 */
+		ANO_DT_Send_Check(*(data_buf+2),sum);
+	}
+		if(*(data_buf+2)==0X15)							//PID6 (空)
+	{
 		ANO_DT_Send_Check(*(data_buf+2),sum);
 	}
 
