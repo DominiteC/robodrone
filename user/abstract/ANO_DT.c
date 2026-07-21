@@ -79,7 +79,7 @@ void ANO_DT_Data_Exchange(void *param)
 		static uint8_t rcdata_cnt 	= 10;
 		static uint8_t motopwm_cnt	= 10;
 		static uint8_t power_cnt	= 50;
-		static uint8_t pid_debug_cnt	= 1;  // PID调试数据发送周期，1表示每次都发送(50Hz)
+		static uint8_t pid_debug_cnt	= 1;
 		senser_cnt = 1;
 		rcdata_cnt = 10;
 		motopwm_cnt = 10;
@@ -157,8 +157,10 @@ void ANO_DT_Data_Exchange(void *param)
 			float pid_yaw_rate_iout = dump_yaw_rate.Iout;
 			float pid_yaw_rate_dout = dump_yaw_rate.Dout;
 			
+			/* yaw rate setpoint = 角度环输出 (MiniFly 方式) */
+			float yaw_rate_setpoint = pid_yaw_angle.Output;
 			
-			Data_Send_AngleRate(gyro_z_val, RC_Control.angle.yaw/10, pid_yaw_rate_err, pid_yaw_rate_out,
+			Data_Send_AngleRate(gyro_z_val, yaw_rate_setpoint, pid_yaw_rate_err, pid_yaw_rate_out,
 													pid_yaw_rate_pout, pid_yaw_rate_iout, pid_yaw_rate_dout, RC_Control.throttle);
 		}	
 /////////////////////////////////////////////////////////////////////////////////////
@@ -170,18 +172,18 @@ void ANO_DT_Data_Exchange(void *param)
 			PIDDump dump_yaw_angle;
 			pid_dump(&pid_yaw_angle, &dump_yaw_angle);
 ANO_DT_Send_RCDataFloat(
-												dump_yaw_rate.Output,        // 1-ESC1 percent
-												dump_yaw_rate.Err,        // 2-ESC2 percent
-                        debugEsc.Esc_Percent_3,        // 3-ESC3 percent
-												debugEsc.Esc_Percent_4,        // 4-ESC4 percent
+												debug_target_angle_yaw,        // 1-目标 yaw
+												state.angle.yaw,        // 2-实际 yaw
+                        debugEsc.Esc_Percent_3, // 3-keyFlight
+												debugEsc.Esc_Percent_4,   // 4-keyLand
                         state.position.y,           // 5-state Y position cm
 												debug_target_angle_pitch,     // 6-target pitch angle
                         debug_target_angle_roll,      // 7-target roll angle
                         state.velocity.x,           // 8-X velocity cm/s
                         state.velocity.y,           // 9-Y velocity cm/s
-                        dump_yaw_angle.Err,              // 10-gyro Z
-                        debug_desired_yaw,           // 11-展开后目标 yaw 角度（连续值）
-                        debug_yaw_meas_cont	         // 12-飞控积分 yaw
+                        state.gyro.z,              // 10-yaw 角度误差
+                        pid_yaw_angle.Output, // 3-keyFlight
+												(float)getCommanderKeyland()   // 4-keyLand
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	
