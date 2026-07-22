@@ -29,10 +29,9 @@ main.c
 
 | 文件 | 作用 |
 | --- | --- |
-| `app_init.c/.h` | 当前启动入口和启动流程编排。负责按顺序调用系统初始化、任务创建、启动诊断，然后删除 `Init` 任务。 |
+| `app_init.c/.h` | 当前启动入口和启动流程编排。负责按顺序调用系统初始化、任务创建、启动诊断，然后删除 `Init` 任务。启动诊断以 `static` 函数直接内联在该文件中。 |
 | `app_system.c/.h` | 系统初始化编排。负责日志、延时、全局时间、串口策略、设备初始化、业务模块初始化等顺序。 |
 | `app_tasks.c/.h` | FreeRTOS 业务任务创建清单。集中维护任务名、栈大小、优先级和创建顺序。 |
-| `app_diagnostics.c/.h` | 启动完成后的基础诊断日志，例如剩余堆和启动完成提示。 |
 | `app_config.h` | app 层启动相关编译期开关，例如地面站串口任务选择。 |
 
 ### domain 层：领域类型
@@ -91,12 +90,12 @@ main.c
 - `main.c` 通过 `App_InitTask` 启动初始化任务。
 - 后续回退并重新小步推进，最终移除旧 `rtos_init.c/.h`。
 
-### 2026-06-29：拆分 app 任务、系统和诊断模块
+### 2026-07-21：合并 app_diagnostics 到 app_init
 
-- `app_tasks.c/.h` 承接 FreeRTOS 任务创建。
-- `app_system.c/.h` 承接系统、设备和业务模块初始化。
-- `app_diagnostics.c/.h` 承接启动完成日志。
-- `app_init.c` 收敛为启动流程编排入口。
+- `app_diagnostics.c/.h` 拆出后只有一个内部函数，单独文件带来编译单元和工程引用开销。
+- 将启动完成日志以 `static` 函数内联到 `app_init.c`，删除 `app_diagnostics.c/.h`。
+- `MDK-ARM/project.uvprojx` 的 app 分组同步移除该文件。
+- 本阶段不改变运行逻辑。
 
 ### 2026-06-29：拆分 domain 领域类型头文件
 
@@ -189,10 +188,19 @@ main.c
 
 ### 2026-07-14：yaw 控制改用飞控自积分 + 陀螺零偏自校准
 
-- 取消对 JY901P 内部 9 轴融合输出 `state.angle.yaw` 的闭环依赖；飞控端用 `state->gyro.z` 自积分得到连续 yaw 角度 `yaw_meas_cont` 作为角度环测量值。
+- 取消对 JY901P 内部 9 轴融合输出 `state.angle.yaw` 的闭环依赖；飞控端用 `state->gyro.z` 自积分得到 yaw 角度 `yaw_meas_cont` 作为角度环测量值。
 - 新增陀螺零偏自校准 `gyro_calibrateGyroZOffset()`：上电后 1.0 秒采 200 帧（`vTaskDelay(5ms)`），三轴方差都 < 4.0 (°/s)² 时接受均值当零偏；`gyro_getAngularVelocity()` 在 `state->gyro.z` 上自动扣减 `gyro_z_offset`。
-- 移除 `isAdjustingYaw` 显式锁角状态机、`yawOld / yawTurnNum / yawUnwrapInited` 这套 ±180° 展开状态（自积分的 yaw 是连续角，无需展开）。
-- `Yaw_Control` 入口增加 `gyro_isGyroZCalibrated() == 0` 早返：未校准时 yaw 控制器不工作，避免在 `state->gyro.z` 零偏未扣除时把误差灌进积分。
-- 杆回中改为 MiniFly 隐式锁角：角速度指令=0 → `Desired_yaw` 不变 → 角度环自然把 `yaw_meas_cont` 维持在当前值；不再有 "回中→锁 Desired_yaw→清 PID 积分" 流程。
-- `state.angle.yaw` 仍由 JY901P 提供并由 `ANO_DT` 走地面站显示，但不再被 `control.c` 读入控制。
-- PID 参数、混控符号、ESC 输出限幅、控制频率、JY901P 模块配置保持不变。
+- 移除 `isAdjustingYaw` 显式锁角状态机、`yawOld / yawTurnNum / yawUnwrapInited` 这套 ±180° 展开状态。
+- `Yaw_Control` 入口增加 `gyro_isGyroZCalibrated() == 0` 早返：未校准时 yaw 控制器不工作。
+- `state.angle.yaw` 仍由 JY901P 提供并走地面站显示，但不再被 `control.c` 读入控制。
+
+### 2026-07-20：yaw 控制对齐 MiniFly 行为
+
+- yaw LPF α 从 0.1 改为 0.2（与 MiniFly 一致）。
+- yaw 积分移除杆回中门控 (`|gyro.z|>0.5`)：始终积分，与 MiniFly Mahony 持续更新一致。
+- `yaw_meas_cont` / `Desired_yaw` 每拍包裹到 ±180°（MiniFly 方式）。
+- 杆回中后 `Desired_yaw` 保持不变 → 角度 PID 自行维持航向（MiniFly 隐式锁角），不再执行 `Desired_yaw = yaw_meas_cont`。
+- 定点模式 yaw 减半（`×0.5`）。
+- RC 失联 500ms 后 yaw 杆量清零；自动降落期间 yaw 中性。
+- `ResetYawState` 新增 `lpf_stick_yaw = 0`，避免上次飞行 LPF 残值带入下次起飞。
+- `commanderDropToGround` / `flyerAutoLand` / `safetyLatched` 全部改用 `setCommanderKeyFlight/Keyland`，确保边沿检测正常触发 PID 复位。

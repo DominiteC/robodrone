@@ -114,8 +114,8 @@ static void commanderDropToGround(void)
 {
 	if(commander.keyFlight)	/* 飞行过程中遥控器信号断开，一键降落 */
 	{
-		commander.keyLand = true;
-		commander.keyFlight = false;
+		setCommanderKeyland(true);
+		setCommanderKeyFlight(false);
 	}	
 }
 uint32_t timestamp = 0;
@@ -178,8 +178,8 @@ void flyerAutoLand(setpoint_t *setpoint,const state_t *state)
 	{
 		landInit = true;
 		landStallCnt = 0;
-		commander.keyLand = false;
-		commander.keyFlight = false;
+		setCommanderKeyland(false);
+		setCommanderKeyFlight(false);
 	}
 	/* 高度停滞检测：5秒内高度变化 < 2cm -> 已触地 */
 	else if (state->height < landMinHeight - 2.0f)
@@ -195,8 +195,8 @@ void flyerAutoLand(setpoint_t *setpoint,const state_t *state)
 		{
 			landInit = true;
 			landStallCnt = 0;
-			commander.keyLand = false;
-			commander.keyFlight = false;
+			setCommanderKeyland(false);
+			setCommanderKeyFlight(false);
 		}
 	}
 	else
@@ -254,8 +254,8 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 	}
 	if (safetyLatched)
 	{
-		commander.keyFlight = false;
-		commander.keyLand = false;
+		setCommanderKeyFlight(false);
+		setCommanderKeyland(false);
 	}
 	state->isRCLocked = (isRCLocked || safetyLatched);
 
@@ -397,8 +397,8 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 									LOG_WARN("失控保护触发: maxAccZ=%.1f cm/s^2, climbRaw=%.2f, 切一键降落",
 										maxAccZ, climbRaw);
 									Alarm_SetMode(ALARM_MODE_ERROR);
-									commander.keyFlight = false;
-									commander.keyLand = true;   /* 走 5s 降落斜坡，不硬停 */
+									setCommanderKeyFlight(false);
+									setCommanderKeyland(true);   /* 走 5s 降落斜坡，不硬停 */
 								}
 							}
 							else
@@ -469,6 +469,12 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 		}
 		else if (commander.ctrlMode == MODE_MANUAL)
 		{
+			/* 手动模式不执行 flyerAutoLand，直接清理 keyLand 防止残留阻塞后续起飞 */
+			if (commander.keyLand)
+			{
+				setCommanderKeyland(false);
+			}
+
 			if (commander.keyFlight)
 			{
 				setpoint->thrust = data.throttle;
@@ -490,11 +496,17 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 	setpoint->angle.roll = data.angle.roll;
 	setpoint->angle.yaw = data.angle.yaw;
 
+	/* RC 失联或自动降落时 yaw 杆量清零 (MiniFly 方式: 约 500ms 后清零 yaw) */
+	if (isRCLocked || (commander.keyLand && !commander.keyFlight))
+	{
+		setpoint->angle.yaw = 0.0f;
+	}
+
 	// LOG_DEBUG("pitch=%.2f,roll=%.2f,yaw=%.2f",setpoint->angle.pitch,setpoint->angle.roll,setpoint->angle.yaw);
 
 		if(commander.ctrlMode == MODE_THREEHOLD && commander.attitudeMode == MODE_AIRPLANE)	/* 光流数据可用，定点模式 */
 		{
-			setpoint->angle.yaw *= 1.0f;	/* 定点模式使用完整yaw杆量 */
+			setpoint->angle.yaw *= 0.5f;	/* 定点模式 yaw 减半 (MiniFly 方式) */
 
 			/* 临时关闭XY位置环：摇杆只给目标速度，回中目标速度为0 */
 			bool stickActive = (fabsf(setpoint->angle.roll) > 1.5f || fabsf(setpoint->angle.pitch) > 1.5f);

@@ -58,7 +58,15 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 #define USART_UX USART1 //printf使用的串口
 void putchar_(char c)
 {
-    while ((USART_UX->SR & 0X40) == 0); /* 等待上一个字符发送完成 */
-    USART_UX->DR = (uint8_t)c; /* 将要发送的字符 ch 写入到DR寄存器 */
-    // HAL_UART_Transmit(&huart1, (uint8_t *)&character, 1, 0xFFFF);   // 这是一个阻塞的函数
+    static char dma_buf[64];
+    static int  dma_pos = 0;
+    extern USART_SendType channel_0;
+
+    dma_buf[dma_pos++] = c;
+
+    /* 遇到换行或缓冲区满时, 通过 DMA 批量发送, 绝不轮询 USART1->DR */
+    if (c == '\n' || dma_pos >= (int)sizeof(dma_buf) - 1) {
+        USART_SendData(&channel_0, (uint8_t *)dma_buf, dma_pos, USART_USE_MOLLOC);
+        dma_pos = 0;
+    }
 }

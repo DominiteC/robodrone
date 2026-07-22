@@ -691,3 +691,33 @@
   - 静态：编译通过、`file -i` 仍为 UTF-8、行尾 LF 不变（Windows 自动转 CRLF）。
   - 飞控：上电 1.0s 后应见 `gyro z offset=... cali OK` 或 `gyro z cali FAIL ... using offset=0, yaw will drift slowly` 日志。
   - 起飞实验：定点起飞后顺时针自旋应当消失；杆打 yaw 转动正常；杆回中后 yaw 角基本不漂。
+
+## 第四十二阶段：yaw 控制对齐 MiniFly 行为
+
+改动文件：
+  - `user/control/control.c`
+  - `user/services/commander.c`
+  - `docs/architecture/current-architecture.md`
+  - `docs/architecture/refactor-notes.md`
+  - `docs/architecture/known-issues.md`
+
+修了什么问题：
+  - 松杆后仅制动角速度但丢失航向保持；RC 失联后 yaw 沿用最后杆量继续旋转；定点模式 yaw 未减半；`lpf_stick_yaw` 残留带入下次起飞；`commanderDropToGround` 直接写字段导致边沿不触发 PID 复位。
+
+做了什么：
+  - yaw LPF α 从 0.1 改为 0.2（与 MiniFly `ctrlValLpf.yaw` 一致）。
+  - yaw 积分移除杆回中门控 (`|gyro.z|>0.5`)：始终积分，与 MiniFly Mahony 持续更新一致。
+  - `yaw_meas_cont` / `Desired_yaw` 每拍 ±180° 包裹（MiniFly 方式）。
+  - 杆回中后 `Desired_yaw` 保持不变（不再执行 `Desired_yaw = yaw_meas_cont`），角度 PID 自行维持航向。
+  - 定点模式 yaw 减半（`setpoint->angle.yaw *= 0.5f`）。
+  - RC 失联/自动降落时 `setpoint->angle.yaw` 强制归零。
+  - `ResetYawState` 新增 `lpf_stick_yaw = 0.0f`。
+  - `commanderDropToGround` / `flyerAutoLand` / 失控保护 / `safetyLatched` 全部改用 `setCommanderKeyFlight/Keyland` 产生边沿。
+
+是否改变运行逻辑：
+  - 是，yaw 控制松杆/失联/定点/复位行为全部对齐 MiniFly 语义。PID 参数、混控符号、ESC 限幅、控制频率不变。
+
+验收方法与验证结果：
+  - 静态：编译通过、UTF-8、LF 不变。
+  - 拆桨测试：杆回中后 `Desired_yaw` 不变（可串口观测 `debug_target_angle_yaw`）；外力推动机身应观察到角度环输出非零、机身有恢复力矩。
+  - RC 断连测试：断开遥控器 500ms 后应见 yaw setpoint 归零；>5s 自动降落后 yaw 中性。

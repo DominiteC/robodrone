@@ -41,6 +41,7 @@
  */
 
 #include "usart_port.h"
+#include "usart_send.h"
 #include <stdio.h>
 
 
@@ -95,10 +96,17 @@ FILE __stdout;
 
 /* MDK下需要重定义fputc函数, printf函数最终会通过调用fputc输出字符串到串口 */
 int fputc(int ch, FILE *f) {
-  while ((USART_UX->SR & 0X40) == 0)
-    ; /* 等待上一个字符发送完成 */
+  static char dma_buf[64];
+  static int  dma_pos = 0;
 
-  USART_UX->DR = (uint8_t)ch; /* 将要发送的字符 ch 写入到DR寄存器 */
+  dma_buf[dma_pos++] = (char)ch;
+
+  /* 遇到换行或缓冲区满时, 通过 DMA 批量发送, 绝不轮询 USART1->DR */
+  if (ch == '\n' || dma_pos >= (int)sizeof(dma_buf) - 1) {
+    extern USART_SendType channel_0;
+    USART_SendData(&channel_0, (uint8_t *)dma_buf, dma_pos, USART_USE_MOLLOC);
+    dma_pos = 0;
+  }
   return ch;
 }
 #endif

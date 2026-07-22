@@ -176,11 +176,13 @@
   - 拆桨起飞时同样顺时针自旋——如果主因是磁干扰，桨卸了磁干扰仍在，飞机应该同样被污染、但此时 `state.angle.yaw` 与手转同向，反而证实磁干扰不是主因。
   - 新版用 `gyro.z * dt` 自积分，第一帧 `gyro.z` 接近 0（飞机静止、陀螺零偏已扣），`yaw_meas_cont = 0` 没有“锁错初值”问题。
 - **早期误判的副产物**：F-10 早期条目把“9 轴被磁力计污染”写成了影响，这是错的。本条目以 2026-07-14 现场验证结果为准。
-- **解决方式（2026-07-14 第四十一阶段）**：
+- **解决方式（2026-07-14 第四十一阶段 + 2026-07-20 第四十二阶段）**：
   - `gyro.c` 新增 `gyro_calibrateGyroZOffset()`：上电后 1.0 秒采 200 帧，三轴方差 < 4.0 (°/s)² 才接受零偏（MiniFly 思路）。
   - `gyro_getAngularVelocity()` 扣 `gyro_z_offset`；`gyro_isGyroZCalibrated()` 标志位。
   - `control.c` `Yaw_Control` 入口加 `gyro_isGyroZCalibrated() == 0` 早返；角度环测量改用飞控端自积分的 `yaw_meas_cont = state->gyro.z * ANGEL_PID_DT`。
-  - 移除 `isAdjustingYaw` 状态机、移除 ±180° 展开状态，改 MiniFly 隐式锁角。
+  - `yaw_meas_cont` / `Desired_yaw` 每拍 ±180° 包裹；杆回中后 `Desired_yaw` 不变，角度 PID 自行维持航向。
+  - LPF α 改为 0.2；移除积分门控；定点 yaw 减半；RC 失联 yaw 归零。
+  - `ResetYawState` 复位 `lpf_stick_yaw`。
 - **状态**：已解决（参考 `refactor-notes.md` 第四十一阶段、`current-architecture.md` 2026-07-14 条目）。
 - **残留风险**：陀螺零偏校准不通过时（`LOG_WARN "gyro z cali FAIL"`）yaw 会缓慢漂；本阶段未拆 `esc.c` 的 95% 输出钳位；未加加速度/陀螺二阶 LPF。
 

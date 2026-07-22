@@ -174,8 +174,8 @@ PID_Init_Config_s pid_pitch_rate_config = {
     .IntegralLimit = 5,
 };
 PID_Init_Config_s pid_yaw_rate_config = {
-    .Kp = 0.6f,
-    .Ki = 0.008f,
+    .Kp = 1.0f,
+    .Ki = 0.015f,
     .Kd = 0.001f,
     .MaxOut = 8.0f, //限幅
     .DeadBand =0.3,//差值大于5才进行PID调节，防止抖动

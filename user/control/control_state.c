@@ -3,6 +3,7 @@
 #include "gyro.h"
 #include "position.h"
 #include "log.h"
+#include "control.h"
 
 void printState(state_t* state)
 {
@@ -20,6 +21,7 @@ void refreshState(state_t* state)
     // 陀螺仪
     gyro_getAngularVelocity(&state->gyro);
     gyro_getAngle(&state->angle);
+    debug_yaw_meas_cont = state->angle.yaw;  /* 遥测: 每拍刷新, 无论 yaw 控制是否激活 */
     gyro_getAcc(&state->acc);
     // 光流（内部已做倾斜补偿 + 旋转补偿，仅在新数据到达时执行一次）
     position_GetVelocity(&state->velocity, &state->angle, &state->gyro);

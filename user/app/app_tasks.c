@@ -11,10 +11,8 @@
 #include "wireless.h"
 #include "control.h"
 #include "mtf_01.h"
-#include "watchdog_guard.h"
 #include "usmart.h"
 #include "gyro.h"            /* gyro_calibrateGyroZOffset */
-
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -23,7 +21,7 @@
 #define TASK_PRIO_ALARM       2
 #define TASK_STACK_USMART     250
 #define TASK_PRIO_USMART      2
-#define TASK_STACK_ANO_DT     350
+#define TASK_STACK_ANO_DT     600
 #define TASK_PRIO_ANO_DT      2
 #define TASK_STACK_SEND       350
 #define TASK_PRIO_SEND        2
@@ -33,8 +31,6 @@
 #define TASK_PRIO_CONTROL     2
 #define TASK_STACK_MTF01      150
 #define TASK_PRIO_MTF01       3
-#define TASK_STACK_WDOG       180
-#define TASK_PRIO_WDOG        5
 #define TASK_STACK_GYRO_CALIB 200
 #define TASK_PRIO_GYRO_CALIB  1
 
@@ -52,12 +48,11 @@ void App_CreateTasks(void)
     xTaskCreate(ANO_DT_Data_Exchange,"ANO_DT",TASK_STACK_ANO_DT,NULL,TASK_PRIO_ANO_DT,NULL);   // 与地面站数据交换任务，通过串口发送数据，与usmart任务互斥
   #endif
 #endif
-  xTaskCreate(SendToRemote,"Send",TASK_STACK_SEND,NULL,TASK_PRIO_SEND,NULL);             // 发送遥控数据任务，通过无线模块发送数据
-  xTaskCreate(Wireless_ReceiveTask,"Receive",TASK_STACK_RECEIVE,NULL,TASK_PRIO_RECEIVE,NULL);  // 接收遥控数据任务，通过无线模块接收数据
-  xTaskCreate(Control_Task,"Control",TASK_STACK_CONTROL,NULL,TASK_PRIO_CONTROL,NULL);          // 控制任务，飞控核心任务，包括姿态解算，位置解算，控制算法等，控制电机驱动，电调和舵机。
-  xTaskCreate(mtf_01_task,"mtf_01",TASK_STACK_MTF01,NULL,TASK_PRIO_MTF01,NULL);            // 光流模块任务
-  xTaskCreate(WatchdogGuard_Task,"WDog",TASK_STACK_WDOG,NULL,TASK_PRIO_WDOG,NULL);       // 看门狗任务
-  xTaskCreate(gyroCalibTask,"GyroCalib",TASK_STACK_GYRO_CALIB,NULL,TASK_PRIO_GYRO_CALIB,NULL); // 陀螺零偏自校准任务(1.0s后自删)
+  xTaskCreate(SendToRemote,"Send",TASK_STACK_SEND,NULL,TASK_PRIO_SEND,NULL);             			// 发送遥控数据任务，通过无线模块发送数据
+  xTaskCreate(Wireless_ReceiveTask,"Receive",TASK_STACK_RECEIVE,NULL,TASK_PRIO_RECEIVE,NULL); // 接收遥控数据任务，通过无线模块接收数据
+  xTaskCreate(Control_Task,"Control",TASK_STACK_CONTROL,NULL,TASK_PRIO_CONTROL,NULL);          	// 控制任务，飞控核心任务，包括姿态解算，位置解算，控制算法等，控制电机驱动，电调和舵机。
+  xTaskCreate(mtf_01_task,"mtf_01",TASK_STACK_MTF01,NULL,TASK_PRIO_MTF01,NULL);            			// 光流模块任务
+  xTaskCreate(gyroCalibTask,"GyroCalib",TASK_STACK_GYRO_CALIB,NULL,TASK_PRIO_GYRO_CALIB,NULL);  // 陀螺零偏自校准任务(1.0s后自删)
 }
 
 static void usmart_task(void* param)

@@ -7,7 +7,6 @@
 void WatchdogGuard_Init(uint32_t timeout_ms);
 void WatchdogGuard_ControlHeartbeat(void);
 void WatchdogGuard_FeedNow(void);
-void WatchdogGuard_Task(void *param);
 bool WatchdogGuard_WasIwdgReset(void);
 void WatchdogGuard_EnterLongAction(uint32_t allow_ms);
 void WatchdogGuard_ExitLongAction(void);

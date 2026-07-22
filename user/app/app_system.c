@@ -38,19 +38,14 @@ static void App_InitBusinessModules(void);
 
 void App_InitSystemModules(void)
 {
-  if (WatchdogGuard_WasIwdgReset())
-  {
-    LOG_WARN("boot after IWDG reset");
-  }
-
   App_InitGlobalServices();
 
   App_InitDevices();
 
   App_InitBusinessModules();
-	
+
   WatchdogGuard_Init(300);
-	
+
 //  调试追踪，目前未启用，要使用比较麻烦
 //  xTraceInitialize();
 //  xTraceEnable(TRC_START);
@@ -77,14 +72,8 @@ static void App_InitGlobalServices(void)
 {
   // 全局组件初始化
   c_code_log_init();
-
-#if !ENABLE_GCS_SERIAL
-  // 完全禁用地面站串口时，同步关闭日志串口，避免USART1发送占用DMA/中断
-  log_disable();
-#endif
   Mydelay_Init();
   HAL_TIM_Base_Start_IT(&TIM_HANDLE_GLOBAL_TIME);
-  // ANO_DT_Init();
 #if ENABLE_GCS_SERIAL
   #if USE_USMART_OR_ANO == 0
     USART_DataTypeInit(&usartDebug, &huart1, USART_buf, sizeof(USART_buf), 0, ANO_DT_CallBack);
@@ -92,12 +81,7 @@ static void App_InitGlobalServices(void)
     USART_DataTypeInit(&usartDebug, &huart1, USART_buf, sizeof(USART_buf), 0, NULL);
   #endif
 #else
-  // 彻底静默USART1，防止对无线链路造成中断/DMA层面的干扰
-  HAL_UART_DMAStop(&huart1);
-  HAL_NVIC_DisableIRQ(USART1_IRQn);
-  HAL_NVIC_DisableIRQ(DMA2_Stream2_IRQn); // USART1_RX DMA
-  HAL_NVIC_DisableIRQ(DMA2_Stream7_IRQn); // USART1_TX DMA
-  HAL_UART_DeInit(&huart1);
+  /* 地面站关闭，但仍保留 USART1 + 日志系统可用（不做 log_disable） */
 #endif
 }
 

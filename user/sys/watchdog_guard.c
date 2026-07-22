@@ -5,8 +5,7 @@
 #include "stm32f4xx.h"
 
 static volatile uint32_t control_heartbeat_tick = 0;
-static volatile bool wd_inited = false;
-static volatile uint32_t long_action_deadline_tick = 0;
+static volatile bool     wd_inited             = false;
 
 bool WatchdogGuard_WasIwdgReset(void)
 {
@@ -20,32 +19,18 @@ bool WatchdogGuard_WasIwdgReset(void)
 
 void WatchdogGuard_Init(uint32_t timeout_ms)
 {
-    if (wd_inited)
-    {
-        return;
-    }
+    if (wd_inited) return;
 
     /* LSI ~= 32kHz, prescaler=64 => 500Hz counter clock */
     uint32_t reload = (uint32_t)((timeout_ms * 500U) / 1000U);
-    if (reload > 4095U)
-    {
-        reload = 4095U;
-    }
-    if (reload < 1U)
-    {
-        reload = 1U;
-    }
+    if (reload > 4095U) reload = 4095U;
+    if (reload < 1U)    reload = 1U;
 
-    /* Enable write access */
-    IWDG->KR = 0x5555U;
-    /* Prescaler = 64 */
-    IWDG->PR = 0x04U;
-    /* Reload value */
+    IWDG->KR  = 0x5555U;
+    IWDG->PR  = 0x04U;
     IWDG->RLR = (reload & 0x0FFFU);
-    /* Reload counter */
-    IWDG->KR = 0xAAAAU;
-    /* Start IWDG */
-    IWDG->KR = 0xCCCCU;
+    IWDG->KR  = 0xAAAAU;
+    IWDG->KR  = 0xCCCCU;
 
     control_heartbeat_tick = xTaskGetTickCount();
     wd_inited = true;
@@ -63,39 +48,30 @@ void WatchdogGuard_FeedNow(void)
 
 void WatchdogGuard_EnterLongAction(uint32_t allow_ms)
 {
-    long_action_deadline_tick = xTaskGetTickCount() + pdMS_TO_TICKS(allow_ms);
+    (void)allow_ms;
 }
 
 void WatchdogGuard_ExitLongAction(void)
 {
-    long_action_deadline_tick = 0;
 }
 
-void WatchdogGuard_Task(void *param)
+/*
+ * vApplicationIdleHook — 借鉴 MiniFly 设计.
+ * 只要 RTOS 调度器正常, 空闲钩子定期喂狗.
+ * 任何任务卡死 → 空闲钩子停 → IWDG 复位.
+ */
+void vApplicationIdleHook(void)
 {
-    (void)param;
-    TickType_t lastWakeTime = xTaskGetTickCount();
+    static uint32_t tickLastFeed = 0;
 
-    while (1)
+    if (!wd_inited) return;
+
+    uint32_t now = xTaskGetTickCount();
+
+    /* 每 150ms 喂一次狗, 避免不必要的 IWDG 寄存器写入 */
+    if ((now - tickLastFeed) >= pdMS_TO_TICKS(150))
     {
-        if (wd_inited)
-        {
-            uint32_t now = xTaskGetTickCount();
-            uint32_t delta = now - control_heartbeat_tick;
-            bool in_long_action = (long_action_deadline_tick != 0) &&
-                                  ((int32_t)(long_action_deadline_tick - now) > 0);
-
-            /* Control loop is expected at 1ms; allow transient jitter */
-            if (in_long_action || delta <= 50U)
-            {
-                WatchdogGuard_FeedNow();
-            }
-            else
-            {
-                LOG_ERROR("control heartbeat timeout=%lums, stop feeding IWDG", delta);
-            }
-        }
-
-        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(20));
+        tickLastFeed = now;
+        WatchdogGuard_FeedNow();
     }
 }
