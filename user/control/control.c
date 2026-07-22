@@ -5,6 +5,7 @@
 #include "gyro.h"            /* 陀螺零偏自校准标志: gyro_isGyroZCalibrated() */
 #include "stdlib.h"
 #include <math.h>
+#include <stdbool.h>
 #include "remotedata.h"
 #include "commander.h"
 #include "position.h"
