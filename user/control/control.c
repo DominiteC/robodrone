@@ -21,7 +21,7 @@
 #define limit(x, min, max) ((x)<(min)?(min):((x)>(max)?(max):(x)))
 
 #define ALTHOLD_THRUST_BASE 49.0f //悬停使用的基准油门
-#define YAW_MAX_RATE	42.0f				// 满杆yaw角速率 deg/s
+#define YAW_RATE_LIMIT  80.0f				// yaw角速率限制 deg/s
 #define YAW_DEADBAND	5.0f				// yaw杆死区
 
 static float thrustLpf = 35;	/*油门低通*/
@@ -29,6 +29,8 @@ static float thrustCmd = 0;    /* 实际用于混控前的推力命令 */
 
 static float Desired_yaw = 0.0f;          /* 期望 yaw 角度, ±180° 包裹 (MiniFly 方式) */
 static bool  yaw_needs_init = true;     /* 起飞后首次进 Yaw_Control 时锁存 JY901P 当前航向 */
+static bool  yaw_stick_active = false;   /* 杆量激活标志 */
+static float yaw_rate_target = 0.0f;     /* 期望 yaw 角速率目标值 */
 /* 飞控自积分 yaw 角度 (仅遥测/调试, 不进控制闭环).
    JY901P state->angle.yaw 天然 ±180°, 角度环直接用它, 不再依赖此积分. */
 float yaw_meas_cont = 0.0f;
@@ -69,6 +71,8 @@ static void ResetYawState(void)
        不写 Desired_yaw — 下次进入 Yaw_Control 时由 yaw_needs_init 锁存 JY901P 当前航向.
        (与 MiniFly 低油门时 attitudeDesired.yaw = state->attitude.yaw 思路一致) */
     yaw_needs_init = true;
+    yaw_stick_active = false;
+    yaw_rate_target = 0.0f;
     debug_target_angle_yaw = 0.0f;
     lpf_stick_yaw = 0.0f;
     PID_ClearIntegral(&pid_yaw_angle);
@@ -397,7 +401,7 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
         if (fabsf(lpf_stick_yaw) > YAW_DEADBAND)
         {
-            Desired_yaw += (lpf_stick_yaw / 100.0f) * YAW_MAX_RATE * ANGEL_PID_DT;
+            Desired_yaw += (lpf_stick_yaw / 100.0f) * YAW_RATE_LIMIT * ANGEL_PID_DT;
         }
         else
         {
