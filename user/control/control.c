@@ -376,10 +376,12 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
     }
 
     /* 陀螺零偏校准通过后首次进入: 锁存 JY901P 当前航向为 Desired_yaw.
-       (与 MiniFly 低油门时 attitudeDesired.yaw = state->attitude.yaw 思路一致) */
+       同时初始化 yaw_rate_target = 0, yaw_stick_active = false. */
     if (yaw_needs_init)
     {
         Desired_yaw = state->angle.yaw;
+        yaw_rate_target = 0.0f;
+        yaw_stick_active = false;
         yaw_needs_init = false;
     }
 
@@ -399,40 +401,38 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
            alpha=0.2 @250Hz → τ≈20ms (MiniFly α=0.2 @100Hz → τ≈50ms). */
         lpf_stick_yaw += (raw_stick - lpf_stick_yaw) * 0.2f;
 
-        if (fabsf(lpf_stick_yaw) > YAW_DEADBAND)
+        bool stick_active_now = (fabsf(lpf_stick_yaw) > YAW_DEADBAND);
+
+        if (stick_active_now)
         {
-            Desired_yaw += (lpf_stick_yaw / 100.0f) * YAW_RATE_LIMIT * ANGEL_PID_DT;
+            /* 拨杆分支: 直接设置角速度目标, Desired_yaw 跟随实际 yaw 避免边沿突变 */
+            yaw_rate_target = limit(lpf_stick_yaw, -YAW_RATE_LIMIT, YAW_RATE_LIMIT);
+            Desired_yaw = state->angle.yaw;
         }
         else
         {
-            /* 松手锁角: 用 JY901P 当前融合 yaw 作为新目标 (MiniFly 方式) */
-            Desired_yaw = state->angle.yaw;
+            /* 回中分支: 仅当从拨杆切换过来时锁存 Desired_yaw 并清角度 PID 积分 */
+            if (yaw_stick_active)
+            {
+                Desired_yaw = state->angle.yaw;
+                PID_ClearIntegral(&pid_yaw_angle);
+            }
+            /* ±180° 最短角误差, 角度 PID 输出作为 yaw 角速度目标 */
+            float yawError = Desired_yaw - state->angle.yaw;
+            if (yawError > 180.0f)       yawError -= 360.0f;
+            else if (yawError < -180.0f) yawError += 360.0f;
+            PIDCalculate(&pid_yaw_angle, Desired_yaw - yawError, Desired_yaw);
+            yaw_rate_target = pid_yaw_angle.Output;
         }
 
-        /* Desired_yaw ±180° 包裹 (MiniFly attitudeDesired.yaw 同样处理) */
-        if (Desired_yaw > 180.0f)       Desired_yaw -= 360.0f;
-        else if (Desired_yaw < -180.0f) Desired_yaw += 360.0f;
-
-        /* 角度环: 误差做 ±180° 包裹 (MiniFly 方式).
-           JY901P yaw 和 Desired_yaw 都在 ±180°, 但可能分别靠近 +180° 和 -180°,
-           直接相减会得到 ~360° 的错误误差, 必须包裹. */
-        float yawError = Desired_yaw - state->angle.yaw;
-        if (yawError > 180.0f)       yawError -= 360.0f;
-        else if (yawError < -180.0f) yawError += 360.0f;
-        /* PIDCalculate(pid, measure, ref): Err = ref - measure.
-           要令 Err = yawError, 则 measure = ref - yawError. */
-        PIDCalculate(&pid_yaw_angle, Desired_yaw - yawError, Desired_yaw);
+        yaw_stick_active = stick_active_now;
         debug_target_angle_yaw = Desired_yaw;
     }
 
     if (RATE_DO_EXECUTE(RATE_PID_RATE,tick))
     {
         // 角速度环
-
-//        PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);
-        PIDCalculate(&pid_yaw_rate, state->gyro.z, pid_yaw_angle.Output);//target->angle.yaw/10
-
-        // LOG_DEBUG("state-yaw-rate:%.2f,set-yaw-rate:%.2f,output:%.2f",state->gyro.z,pid_yaw_angle.Output,pid_yaw_rate.Output);
+        PIDCalculate(&pid_yaw_rate, state->gyro.z, yaw_rate_target);
     }
 }
 
