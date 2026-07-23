@@ -174,16 +174,16 @@ void ANO_DT_Data_Exchange(void *param)
 ANO_DT_Send_RCDataFloat(
 												debug_target_angle_yaw,        // 1-目标 yaw
 												state.angle.yaw,        // 2-实际 yaw
-                        pid_yaw_rate.Output,
-												debugEsc.Esc_Percent_4,   // 4-keyLand
-                        state.position.y,           // 5-state Y position cm
-												debug_target_angle_pitch,     // 6-target pitch angle
+                        pid_yaw_rate.Output,      // 3-yaw rate PID输出
+												pid_z_velocity.Ref,    // 4-目标Z速度 cm/s
+                        state.velocity.z,         // 5-实际Z速度 cm/s
+												pid_z_velocity.Output, // 6-Z速度环PID输出
                         debug_target_angle_roll,      // 7-target roll angle
                         state.velocity.x,           // 8-X velocity cm/s
                         state.velocity.y,           // 9-Y velocity cm/s
                         state.gyro.z,              // 10-yaw 角度误差
-                        pid_yaw_angle.Output, // 3-keyFlight
-												debug_yaw_rate_target   // 4-keyLand
+                        pid_yaw_angle.Output, // 11-yaw 角度环PID输出
+												debug_yaw_rate_target   // 12-yaw 角速度目标
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	

@@ -58,5 +58,6 @@ bool     mtf_01_stream_take_sample(MtfSample *out, uint32_t now_ms);
 MtfHealth mtf_01_stream_get_health(uint32_t now_ms);
 bool     mtf_01_stream_is_flow_usable(uint32_t now_ms);
 void     mtf_01_stream_get_diagnostics(MtfDiagnostics *out);
+void     mtf_01_stream_inc_queue_drop(void);   /* ISR 中队列满时递增丢帧计数 */
 
 #endif /* __MTF_01_STREAM_H__ */

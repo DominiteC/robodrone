@@ -73,11 +73,7 @@ bool mtf_01_pingpong_callback(USART_Data *self,
 
 	BaseType_t hpw = pdFALSE;
 	if (xQueueSendFromISR(s_raw_queue, &qc, &hpw) != pdTRUE) {
-		/* 队列满：递增 drop 计数（通过先读后写诊断快照） */
-		MtfDiagnostics d;
-		mtf_01_stream_get_diagnostics(&d);
-		/* raw_queue_drop_count 在 push_chunk 中也会递增；
-		   这里只在队列丢弃时额外标记，任务端记录最终值 */
+		mtf_01_stream_inc_queue_drop();
 	}
 	portYIELD_FROM_ISR(hpw);
 	return true;

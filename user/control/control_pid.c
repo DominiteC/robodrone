@@ -9,13 +9,14 @@
  */
 PID_Init_Config_s pid_height_position_config = {
     .Kp = 1.5f,
-    .Ki = 0.0f,
-    .Kd = 0.00f,
-    .MaxOut = 80.0f, //限幅
+    .Ki = 0.005f,
+    .Kd = 0.003f,
+    .MaxOut = 50.0f, //限幅
     .DeadBand = 0,//差值大于5才进行PID调节，防止抖动
     .DeadBandOutputMode = PID_DEADBAND_OUTPUT_ZERO,
-    .Improve = PID_DeltaT_Limit | PID_OutputFilter | PID_Integral_Limit,
+    .Improve = PID_DeltaT_Limit | PID_OutputFilter | PID_Integral_Limit| PID_Derivative_On_Measurement | PID_DerivativeFilter,
     .Output_LPF_RC = DEFAULT_LPF_RC,
+		.Derivative_LPF_RC = 0.003f,
     .DeltaT_Limit_Max = 0.1f, //时间间隔限幅
     .DeltaT_Limit_Min = 0.0001f, //时间间隔限幅
     .IntegralLimit = 80.f,
@@ -26,7 +27,7 @@ PID_Init_Config_s pid_x_position_config = {
     .Kp = 0.5f,
     .Ki = 0.0f,
     .Kd = 0.0f,
-    .MaxOut = 1200.0f, //输出速度限幅 cm/s
+    .MaxOut = 30.0f, //输出速度限幅 cm/s
     .DeadBand = 3.0f,
     .DeadBandOutputMode = PID_DEADBAND_OUTPUT_ZERO,
     .Improve = PID_DeltaT_Limit | PID_OutputFilter | PID_Integral_Limit,
@@ -39,7 +40,7 @@ PID_Init_Config_s pid_y_position_config = {
     .Kp = 0.5f,
     .Ki = 0.0f,
     .Kd = 0.0f,
-    .MaxOut = 1200.0f,
+    .MaxOut = 30.0f,
     .DeadBand = 3.0f,
     .DeadBandOutputMode = PID_DEADBAND_OUTPUT_ZERO,
     .Improve = PID_DeltaT_Limit | PID_OutputFilter | PID_Integral_Limit,
@@ -82,8 +83,8 @@ PID_Init_Config_s pid_y_velocity_config = {
 
 
 PID_Init_Config_s pid_z_velocity_config = {
-    .Kp = 0.050f,
-    .Ki = 0.005f,
+    .Kp = 0.080f,
+    .Ki = 0.000f,
     .Kd = 0.005f,
     .MaxOut = 50.0f, //限幅
     .DeadBand =0.2,//差值大于5才进行PID调节，防止抖动
@@ -176,7 +177,7 @@ PID_Init_Config_s pid_pitch_rate_config = {
 };
 PID_Init_Config_s pid_yaw_rate_config = {
     .Kp = 0.6f,
-    .Ki = 0.012f,
+    .Ki = 0.008f,
     .Kd = 0.005f,
     .MaxOut = 15.0f, //限幅
     .DeadBand =0.3,//差值大于5才进行PID调节，防止抖动

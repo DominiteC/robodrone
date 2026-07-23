@@ -305,6 +305,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
   USART_Data* this = usartDataHead_handle;
+  size_t idx = 0u;
   while(this) {
     if (huart->Instance == this->huart->Instance) {
       this->usart_rx_sta = 0;
@@ -313,12 +314,22 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
       __HAL_UART_CLEAR_NEFLAG(huart);
       __HAL_UART_CLEAR_OREFLAG(huart);
       HAL_UART_DMAStop(huart);
-      HAL_UARTEx_ReceiveToIdle_DMA(this->huart,
-                                   this->usart_rx_buf,
-                                   this->rxSize_Max);
+
+      /* ping-pong 路径：ORE 后重置 ping-pong 状态，防止 active 标志失步 */
+      if (idx < USART_MAX_INSTANCES && g_pp[idx].running) {
+        g_pp[idx].active = 1u;  /* 从 buf_a 重开，与首次初始化一致 */
+        HAL_UARTEx_ReceiveToIdle_DMA(this->huart,
+                                     g_pp[idx].buf_a,
+                                     g_pp[idx].buf_size);
+      } else {
+        HAL_UARTEx_ReceiveToIdle_DMA(this->huart,
+                                     this->usart_rx_buf,
+                                     this->rxSize_Max);
+      }
       __HAL_DMA_DISABLE_IT(this->huart->hdmarx, DMA_IT_HT);
       return;
     }
+    idx++;
     this = this->next;
   }
 }
@@ -368,7 +379,7 @@ bool USART_DataStartPingPong(USART_Data *self, uint8_t *buf_a,
     g_pp[idx].buf_a    = buf_a;
     g_pp[idx].buf_b    = buf_b;
     g_pp[idx].buf_size = buf_size;
-    g_pp[idx].active   = 0u;
+    g_pp[idx].active   = 1u;  /* DMA 初始往 buf_a 写，active=1 使首次回调取到 buf_a */
     g_pp[idx].cb       = cb;
     g_pp[idx].user     = user;
     g_pp[idx].running  = true;

@@ -207,3 +207,8 @@ void mtf_01_stream_get_diagnostics(MtfDiagnostics *out)
     if (out == NULL) return;
     *out = g_stream.diag;
 }
+
+void mtf_01_stream_inc_queue_drop(void)
+{
+    g_stream.diag.raw_queue_drop_count++;
+}

@@ -49,7 +49,7 @@ void safeCheck(MotorCtrl* ctrl, state_t* state)
 
             MotorControl(ctrl);
 
-            LOG_ERROR("°²È«´¥·¢£º×ËÌ¬³¬ÏŞ (roll=%.1f¡ã, pitch=%.1f¡ã)", state->angle.roll, state->angle.pitch);
+            LOG_ERROR("å®‰å…¨è§¦å‘ï¼šå§¿æ€è¶…é™ (roll=%.1fÂ°, pitch=%.1fÂ°)", state->angle.roll, state->angle.pitch);
             safety_triggered = true;
         }
     }
@@ -57,7 +57,7 @@ void safeCheck(MotorCtrl* ctrl, state_t* state)
     {
         if (safety_triggered)
         {
-            LOG_INFO("°²È«×´Ì¬»Ö¸´£º×ËÌ¬Õı³£");
+            LOG_INFO("å®‰å…¨çŠ¶æ€æ¢å¤ï¼šå§¿æ€æ­£å¸¸");
             safety_triggered = false;
         }
     }

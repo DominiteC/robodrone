@@ -13,7 +13,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define TAKEOFF_HEIGHT		120.f
+#define TAKEOFF_HEIGHT		60.f
 #define TAKEOFF_MIN_SPEED	5.f
 #define TAKEOFF_SLOW_ZONE	30.f
 #define LAND_MIN_SPEED		4.f
@@ -375,6 +375,7 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 
 					if (fabsf(climb) > 5.f)
 					{
+						/* 有杆输入：直接设置目标速度 */
 						isAdjustingPosZ = true;
 						isBrakingPosZ = false;
 						brakePosZTime = 0;
@@ -405,35 +406,36 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 								maxAccZOverCnt = 0;
 							}
 						}
-						else if (isAdjustingPosZ == true)
+					}
+					else if (isAdjustingPosZ == true)
+					{
+						/* 松杆回中：速度环刹车 → 切位置环锁高 */
+						if (isBrakingPosZ == false)
 						{
-							if (isBrakingPosZ == false)
-							{
-								isBrakingPosZ = true;
-								brakePosZTime = 0;
-							}
-
-							setpoint->mode_z = modeVelocity;
-							setpoint->vel.z = 0;
-
-							if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
-							{
-								isAdjustingPosZ = false;
-								isBrakingPosZ = false;
-								brakePosZTime = 0;
-								holdHeight = state->height + errorPosZ;
-								setpoint->mode_z = modeAbs;
-							}
-							setpoint->height = holdHeight;
+							isBrakingPosZ = true;
+							brakePosZTime = 0;
 						}
-						else
+
+						setpoint->mode_z = modeVelocity;
+						setpoint->vel.z = 0;
+
+						if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
 						{
+							isAdjustingPosZ = false;
+							isBrakingPosZ = false;
+							brakePosZTime = 0;
+							holdHeight = state->height + errorPosZ;
 							setpoint->mode_z = modeAbs;
-							setpoint->vel.z = 0;
-							errorPosZ = holdHeight - state->height;
-							errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
-							setpoint->height = holdHeight;
 						}
+						setpoint->height = holdHeight;
+					}
+					else
+					{
+						setpoint->mode_z = modeAbs;
+						setpoint->vel.z = 0;
+						errorPosZ = holdHeight - state->height;
+						errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
+						setpoint->height = holdHeight;
 					}
 
 					/* 跟踪窗口每 ~3.2s 重置一次 (250Hz*800=200000)，

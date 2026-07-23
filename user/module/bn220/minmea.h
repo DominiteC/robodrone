@@ -281,7 +281,7 @@ static inline int_least32_t minmea_rescale(const struct minmea_float *f, int_lea
 static inline float minmea_tofloat(const struct minmea_float *f)
 {
     if (f->scale == 0)
-        return NAN;
+        return 0.0f / 0.0f;
     return (float) f->value / (float) f->scale;
 }
 
@@ -292,11 +292,11 @@ static inline float minmea_tofloat(const struct minmea_float *f)
 static inline float minmea_tocoord(const struct minmea_float *f)
 {
     if (f->scale == 0)
-        return NAN;
+        return 0.0f / 0.0f;
     if (f->scale  > (INT_LEAST32_MAX / 100))
-        return NAN;
+        return 0.0f / 0.0f;
     if (f->scale < (INT_LEAST32_MIN / 100))
-        return NAN;
+        return 0.0f / 0.0f;
     int_least32_t degrees = f->value / (f->scale * 100);
     int_least32_t minutes = f->value % (f->scale * 100);
     return (float) degrees + (float) minutes / (60 * f->scale);
