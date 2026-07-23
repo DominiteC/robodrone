@@ -1676,6 +1676,11 @@
               <FilePath>..\user\module\mtf01\mtf_01.c</FilePath>
             </File>
             <File>
+              <FileName>mtf_01_stream.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\module\mtf01\mtf_01_stream.c</FilePath>
+            </File>
+            <File>
               <FileName>bn220.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\module\bn220\bn220.c</FilePath>

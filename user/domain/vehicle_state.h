@@ -25,6 +25,7 @@ typedef struct
 {
 	float_velocity vel;
 	float_angle angle;
+	float_angle attitudeRate; /* 外环(角度环)输出 = 内环(角速率环)目标 (°/s) */
 	float height;
 	float thrust;
 	float_xy_pos pos; // target XY position (cm)

@@ -5,9 +5,9 @@
  */
 #include "commander.h"
 #include "C_code_Log.h"
-#include "position.h"
 #include "AT24Cxx.h"
 #include "alarm.h"
+#include "position.h"
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -118,7 +118,6 @@ static void commanderDropToGround(void)
 		setCommanderKeyFlight(false);
 	}	
 }
-uint32_t timestamp = 0;
 /********************************************************
  *ctrlDataUpdate()	更新控制数据
  *返回0表示正常有数据，返回1表示失联，但是使用旧数据，返回2表示使用构造的假数据，返回3表示强制锁定
@@ -504,28 +503,57 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 
 	// LOG_DEBUG("pitch=%.2f,roll=%.2f,yaw=%.2f",setpoint->angle.pitch,setpoint->angle.roll,setpoint->angle.yaw);
 
-		if(commander.ctrlMode == MODE_THREEHOLD && commander.attitudeMode == MODE_AIRPLANE)	/* 光流数据可用，定点模式 */
+		if(commander.ctrlMode == MODE_THREEHOLD && commander.attitudeMode == MODE_AIRPLANE)	/* 光流定点模式 */
 		{
+			if (!position_IsXYFlowValid())	/* 光流失效：退出XY环，回退纯姿态+定高 */
+			{
+				position_ResetFlowState();
+				xyHoldActive = false;
+				isAdjustingPosXY = true;
+				isBrakingPosXY = false;
+				brakePosXYTime = 0;
+				setpoint->mode_x = modeDisable;
+				setpoint->mode_y = modeDisable;
+				setpoint->vel.x = 0.f;
+				setpoint->vel.y = 0.f;
+			}
+			else
+			{
 			setpoint->angle.yaw *= 0.5f;	/* 定点模式 yaw 减半 (MiniFly 方式) */
 
-			/* 临时关闭XY位置环：摇杆只给目标速度，回中目标速度为0 */
+			/* 摇杆控制速度，回中锁定当前位置 */
 			bool stickActive = (fabsf(setpoint->angle.roll) > 1.5f || fabsf(setpoint->angle.pitch) > 1.5f);
-			xyHoldActive = false;
-			isAdjustingPosXY = false;
-			isBrakingPosXY = false;
-			brakePosXYTime = 0;
-			adjustPosXYTime = 0;
-			setpoint->mode_x = modeVelocity;
-			setpoint->mode_y = modeVelocity;
 			if (stickActive)
 			{
+				/* 摇杆激活：退出位置保持，切速度模式 */
+				xyHoldActive = false;
+				isAdjustingPosXY = false;
+				isBrakingPosXY = false;
+				brakePosXYTime = 0;
+				setpoint->mode_x = modeVelocity;
+				setpoint->mode_y = modeVelocity;
 				setpoint->vel.x = -setpoint->angle.pitch * XY_STICK_VEL_SCALE;
 				setpoint->vel.y = -setpoint->angle.roll * XY_STICK_VEL_SCALE;
 			}
 			else
 			{
+				/* 摇杆回中：锁当前位置，切位置保持 */
+				if (!xyHoldActive)
+				{
+					holdPosX = state->position.x;
+					holdPosY = state->position.y;
+					xyHoldActive = true;
+				}
+				isAdjustingPosXY = false;
+				isBrakingPosXY = false;
+				brakePosXYTime = 0;
+				setpoint->mode_x = modeAbs;
+				setpoint->mode_y = modeAbs;
+				setpoint->pos.x = holdPosX;
+				setpoint->pos.y = holdPosY;
 				setpoint->vel.x = 0.f;
 				setpoint->vel.y = 0.f;
+			}
 			}
 		}
 		else	/* 非定点模式，关闭XY位置环 */

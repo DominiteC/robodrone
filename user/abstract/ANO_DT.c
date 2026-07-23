@@ -174,7 +174,7 @@ void ANO_DT_Data_Exchange(void *param)
 ANO_DT_Send_RCDataFloat(
 												debug_target_angle_yaw,        // 1-目标 yaw
 												state.angle.yaw,        // 2-实际 yaw
-                        debugEsc.Esc_Percent_3, // 3-keyFlight
+                        pid_yaw_rate.Output,
 												debugEsc.Esc_Percent_4,   // 4-keyLand
                         state.position.y,           // 5-state Y position cm
 												debug_target_angle_pitch,     // 6-target pitch angle
@@ -183,7 +183,7 @@ ANO_DT_Send_RCDataFloat(
                         state.velocity.y,           // 9-Y velocity cm/s
                         state.gyro.z,              // 10-yaw 角度误差
                         pid_yaw_angle.Output, // 3-keyFlight
-												(float)getCommanderKeyland()   // 4-keyLand
+												debug_yaw_rate_target   // 4-keyLand
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	

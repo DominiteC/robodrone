@@ -74,4 +74,29 @@ static inline uint8_t* USART_GetData(USART_Data *this)
 {
     return this->usart_rx_buf;
 }
+/* ---- MTF-01 专用 ping-pong DMA 接口 ---- */
+#ifndef USART_MAX_INSTANCES
+#define USART_MAX_INSTANCES 8u
+#endif
+
+typedef enum {
+    USART_PINGPONG_EVT_IDLE = 0,
+    USART_PINGPONG_EVT_TC   = 1,
+} UsartPingPongEvent;
+
+typedef struct {
+    uint8_t          *data;
+    uint16_t          len;
+    UsartPingPongEvent event;
+} UsartPingPongChunk;
+
+typedef bool (*UsartPingPongCallback)(USART_Data *self,
+                                      const UsartPingPongChunk *chunk,
+                                      void *user);
+
+bool USART_DataStartPingPong(USART_Data *self, uint8_t *buf_a,
+                             uint8_t *buf_b, uint16_t buf_size,
+                             UsartPingPongCallback cb, void *user);
+void USART_DataStopPingPong(USART_Data *self);
+
 #endif  // USART_PORT_H

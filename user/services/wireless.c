@@ -18,7 +18,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
-#include "cmsis_os2.h"
 
 Wireless_ReceiveCallback wireless_callback = NULL;
 

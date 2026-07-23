@@ -204,3 +204,19 @@ main.c
 - RC 失联 500ms 后 yaw 杆量清零；自动降落期间 yaw 中性。
 - `ResetYawState` 新增 `lpf_stick_yaw = 0`，避免上次飞行 LPF 残值带入下次起飞。
 - `commanderDropToGround` / `flyerAutoLand` / `safetyLatched` 全部改用 `setCommanderKeyFlight/Keyland`，确保边沿检测正常触发 PID 复位。
+
+
+### 2026-07-23:MTF-01 光流可靠性闭环(待实施)
+
+- 设计文档已写:`docs/superpowers/specs/2026-07-23-mtf01-flow-reliability-design.md`。
+- 来源依据:MicoAir 官方 MTF-01 产品页(100Hz / 115200 / MicoLink)、MicoAir MicoLink 解码文档(0xEF / 0x51 / 20B payload / 27B 整帧)、ArduPilot `AP_OpticalFlow_MAV::update()` 的 `OPTFLOW_MAV_TIMEOUT_SEC = 0.5f`。
+- 状态:`known-issues.md` 已新增 F-11; 本阶段只登记设计, 尚未改 C 代码。
+- 实施时再回写: 实际改动文件清单、是否改变任务周期/优先级/栈/算法、硬件验证方法与结果、上板统计的 `flow_quality`/`flow_status`/`tof_status` 分布。
+
+
+### 2026-07-23:MTF-01 后续阶段路线图(待实施)
+
+- 路线图已写:`docs/superpowers/plans/2026-07-23-mtf01-future-stages-roadmap.md`。
+- 范围:F-1 启用 `flow_quality/status` 真实阈值; F-2 ToF + BMP280 高度融合; F-3 JY901P 加速度单位/坐标系/重力补偿验证; F-4 IMU 短时预测 + 光流速度残差校正; F-5 INAV 风格位置/速度双残差校正。
+- 触发条件:每个阶段都依赖前阶段上板验证通过; 不与主阶段同提交; 不动 PID。
+- 实施时再回写: 实际改动文件清单、是否改变任务周期/优先级/栈/算法、硬件验证方法与结果、上板统计的阈值依据。

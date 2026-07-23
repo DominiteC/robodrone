@@ -18,7 +18,19 @@
 
 ## 飞控端已知问题
 
+### F-11. MTF-01 光流可靠性缺陷
+
+- **影响**:MTF-01 通信链路存在丢包、DMA 覆盖竞态、解析错位和无超时检测四类风险;当前 `payload` 与 `rx_flag` 全局共享、`position_Update` 无失联保护,可能出现 "运行久了光流突然不更新" 和 "光流恢复后旧速度继续影响控制" 两类现象。
+- **证据**:
+  - `user/module/mtf01/mtf_01.c:31-43` 与 `user/module/mtf01/mtf_01.c:50-64`: 回调取 `getLen` 但固定复制 27 字节; 解析任务固定消费 27 字节。
+  - `user/hardware/usart/usart_port.c:244-257`: 通用 UART 回调在调设备回调前先重启同一缓冲的 `HAL_UARTEx_ReceiveToIdle_DMA`。
+  - `user/module/mtf01/mtf_01.c:14` 与 `user/module/mtf01/mtf_01.c:112-120`: `rx_flag` 非 volatile, 跨 `mtf_01_task` 与 `Control_Task` 共享。
+  - `user/abstract/position.c:118-292`: `micolink_rx_ok()` 是仅有的 "有新数据" 标志, 没有最后有效帧时间、没有失联去抖、没有自动退出 XY 定点。
+- **建议方向**:MTF-01 专用可靠接收层 + 完整样本快照 + `INIT/VALID/STALE/LOST` 健康状态机 + 失效后退出 XY 定点、保留姿态/高度控制;按 `docs/superpowers/specs/2026-07-23-mtf01-flow-reliability-design.md` 实施。
+- **优先级**:P0(飞行安全相关, 光流失控会直接影响定点和定位控制)。
+
 ### F-1. `commanderGetSetpoint` 是当前最大的长函数
+
 
 - **影响**：单函数混合多种职责，新增模式或修改安全互锁时容易引入回归；单元测试与代码 review 成本高。
 - **证据**：`user/services/commander.c:223-490`，函数体约 268 行。

@@ -192,6 +192,20 @@ static int USART_DataAttach(USART_Data *this)
 	return 0;
 }
 
+/* ---- MTF-01 ping-pong 类型与状态 ---- */
+
+typedef struct {
+    uint8_t              *buf_a;
+    uint8_t              *buf_b;
+    uint16_t              buf_size;
+    uint8_t               active;    /* 0=使用 buf_a，1=使用 buf_b */
+    UsartPingPongCallback cb;
+    void                 *user;
+    bool                  running;
+} PingPongState;
+
+static PingPongState g_pp[USART_MAX_INSTANCES];
+
 /**
  * @brief       串口数据接收中断回调函数
                 数据处理在这里进行（中断接收模式使用）
@@ -245,6 +259,34 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   USART_Data* this = usartDataHead_handle;
   while(this) {
     if (huart->Instance == this->huart->Instance) {
+      /* ---- ping-pong 路径 ---- */
+      {
+        size_t idx = 0u;
+        USART_Data *cur = usartDataHead_handle;
+        while (cur && cur != this) { idx++; cur = cur->next; }
+        if (cur && idx < USART_MAX_INSTANCES) {
+          PingPongState *pp = &g_pp[idx];
+          if (pp->running && pp->cb != NULL) {
+            uint8_t *finished = pp->active ? pp->buf_a : pp->buf_b;
+            UsartPingPongChunk chunk = {
+                .data  = finished,
+                .len   = Size,
+                .event = (huart->RxEventType == HAL_UART_RXEVENT_TC
+                              ? USART_PINGPONG_EVT_TC
+                              : USART_PINGPONG_EVT_IDLE),
+            };
+            pp->active ^= 1u;
+            HAL_UARTEx_ReceiveToIdle_DMA(this->huart,
+                pp->active ? pp->buf_b : pp->buf_a,
+                pp->buf_size);
+            __HAL_DMA_DISABLE_IT(this->huart->hdmarx, DMA_IT_HT);
+            pp->cb(this, &chunk, pp->user);
+            this = this->next;
+            continue; /* 跳过原 callback 路径 */
+          }
+        }
+      }
+      /* ---- 原路径 ---- */
       this->usart_rx_sta = Size;
       this->usart_rx_sta |= 0x8000;  // 接收完成
       HAL_UARTEx_ReceiveToIdle_DMA(this->huart,
@@ -307,4 +349,40 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 //     OSIntExit();
 // #endif
 // }
+/* ---- MTF-01 ping-pong 实现 ---- */
+
+bool USART_DataStartPingPong(USART_Data *self, uint8_t *buf_a,
+                             uint8_t *buf_b, uint16_t buf_size,
+                             UsartPingPongCallback cb, void *user)
+{
+    if (self == NULL || buf_a == NULL || buf_b == NULL
+        || buf_size == 0u || cb == NULL)
+        return false;
+
+    /* 遍历链表获取 self 的索引 */
+    size_t idx = 0u;
+    USART_Data *cur = usartDataHead_handle;
+    while (cur && cur != self) { idx++; cur = cur->next; }
+    if (cur == NULL || idx >= USART_MAX_INSTANCES) return false;
+
+    g_pp[idx].buf_a    = buf_a;
+    g_pp[idx].buf_b    = buf_b;
+    g_pp[idx].buf_size = buf_size;
+    g_pp[idx].active   = 0u;
+    g_pp[idx].cb       = cb;
+    g_pp[idx].user     = user;
+    g_pp[idx].running  = true;
+    return true;
+}
+
+void USART_DataStopPingPong(USART_Data *self)
+{
+    if (self == NULL) return;
+    size_t idx = 0u;
+    USART_Data *cur = usartDataHead_handle;
+    while (cur && cur != self) { idx++; cur = cur->next; }
+    if (cur == NULL || idx >= USART_MAX_INSTANCES) return;
+    g_pp[idx].running = false;
+}
+
 #endif

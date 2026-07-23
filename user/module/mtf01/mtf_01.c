@@ -1,66 +1,157 @@
 #include "mtf_01.h"
+#include "mtf_01_stream.h"
 #include "usart_port.h"
 #include "log.h"
 #include "globalTime.h"
+#include "position.h"
+#include "jy901p.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 
 USART_Data mtf_01_handle;
-uint8_t mtf_01_buff[27];
-MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;	// 光流解析到的数据
+MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;	// 光流解析到的数据（保留兼容旧代码）
 
-bool rx_flag = false;	// 接收到有效数据标志
+/* ---- ping-pong 缓冲 ---- */
+static uint8_t s_pp_buf[MTF_PINGPONG_BUF_COUNT][MTF_PINGPONG_BUF_SIZE];
 
-QueueHandle_t mtf_data_queue;
+/* ---- 原始块队列 ---- */
+static QueueHandle_t s_raw_queue;
 
-void micolink_decode(uint8_t data);
 void mtf_01_callback(void* this);
 
+/* ---- 前向声明（解析器仍在 mtf_01.c 中，供 mtf_01_stream.c 链接） ---- */
+bool micolink_check_sum(MICOLINK_MSG_t* msg);
+bool micolink_parse_char(MICOLINK_MSG_t* msg, uint8_t data);
+
 /**
- * @brief 光流传感器初始化
- * 
+ * @brief 光流传感器初始化（使用 ping-pong + 流解析器）
  */
 void mtf_01_init(void)
 {
-	USART_DataTypeInit(&mtf_01_handle,&MTF_01_USART_HANDLE,mtf_01_buff,sizeof(mtf_01_buff),DMA_MODE,mtf_01_callback);
-    mtf_data_queue = xQueueCreate(10, sizeof(mtf_01_buff));
-}
+	USART_DataTypeInit(&mtf_01_handle, &MTF_01_USART_HANDLE,
+	                   (uint8_t*)s_pp_buf[0], MTF_PINGPONG_BUF_SIZE,
+	                   DMA_MODE, mtf_01_callback);
 
-void mtf_01_callback(void* this)
-{
-	if ((USART_Data*)this == &mtf_01_handle)
-	{
-		uint8_t getLen = USART_DataGetReceivedLen((USART_Data*)this);
-		uint8_t* data = USART_GetData((USART_Data*)this);
-        xQueueSendFromISR(mtf_data_queue, data, NULL);
-		// for(uint8_t i = 0;i < getLen;i++)
-		// {
-		// 	micolink_decode(data[i]);
-		// }
-	}
+	mtf_01_stream_init(getGlobalTime());
+
+	s_raw_queue = xQueueCreate(MTF_RAW_QUEUE_LEN, sizeof(MtfRxChunk));
+
+	USART_DataStartPingPong(&mtf_01_handle,
+	                        s_pp_buf[0], s_pp_buf[1],
+	                        MTF_PINGPONG_BUF_SIZE,
+	                        mtf_01_pingpong_callback, NULL);
 }
 
 /**
- * @brief 光流传感器数据处理任务
- * 
- * @param argument 任务参数
+ * @brief 原回调（不再用于 MTF-01 数据路径，保留占位避免 HAL 空指针）
+ */
+void mtf_01_callback(void* this)
+{
+	(void)this;
+	/* MTF-01 数据路径已迁移至 mtf_01_pingpong_callback */
+}
+
+/**
+ * @brief ping-pong 中断回调 — 将 DMA 块推入 FreeRTOS 队列
+ * @note 运行在中断上下文
+ */
+bool mtf_01_pingpong_callback(USART_Data *self,
+                              const UsartPingPongChunk *chunk,
+                              void *user)
+{
+	(void)self;
+	(void)user;
+	if (chunk == NULL || chunk->data == NULL) return false;
+
+	MtfRxChunk qc;
+	qc.len   = chunk->len;
+	qc.event = (MtfEventType)chunk->event;
+	if (qc.len > MTF_RX_CHUNK_SIZE) qc.len = MTF_RX_CHUNK_SIZE;
+	memcpy(qc.data, chunk->data, qc.len);
+
+	BaseType_t hpw = pdFALSE;
+	if (xQueueSendFromISR(s_raw_queue, &qc, &hpw) != pdTRUE) {
+		/* 队列满：递增 drop 计数（通过先读后写诊断快照） */
+		MtfDiagnostics d;
+		mtf_01_stream_get_diagnostics(&d);
+		/* raw_queue_drop_count 在 push_chunk 中也会递增；
+		   这里只在队列丢弃时额外标记，任务端记录最终值 */
+	}
+	portYIELD_FROM_ISR(hpw);
+	return true;
+}
+
+/**
+ * @brief 光流传感器数据处理任务（阻塞接收 + 推入流解析器 + 1s 诊断输出）
  */
 void mtf_01_task(void *argument)
 {
-    uint8_t mtf_01_date[27];
-    while(1)
-    {
-        if(xQueueReceive(mtf_data_queue, &mtf_01_date, portMAX_DELAY) == pdTRUE)
-        {
-            // 处理接收到的数据
-            for(uint8_t i = 0;i < 27;i++)
-            {
-                micolink_decode(mtf_01_date[i]);
-            }
-        }
-    }
+	(void)argument;
+	MtfRxChunk chunk;
+	uint32_t last_log_ms = 0u;
+	for (;;) {
+		if (xQueueReceive(s_raw_queue, &chunk, portMAX_DELAY) == pdTRUE) {
+			mtf_01_stream_push_chunk(&chunk);
+		}
+
+		uint32_t now = getGlobalTime();
+		if (now - last_log_ms >= 1000u) {
+			last_log_ms = now;
+			MtfDiagnostics d;
+			mtf_01_get_diagnostics(&d);
+			LOG_INFO("MTF h:%d ok:%lu q:%u age:%lu vx:%d vy:%d ax:%d ay:%d az:%d",
+			         (int)d.health,
+			         (unsigned long)d.parse_ok_count,
+			         (unsigned)d.last_flow_quality,
+			         (unsigned long)(now - d.last_frame_ms),
+			         (int)velocity.x,
+			         (int)velocity.y,
+			         (int)(stcAcc.a[0] * 100.f),
+			         (int)(stcAcc.a[1] * 100.f),
+			         (int)(stcAcc.a[2] * 100.f));
+		}
+	}
+}
+
+/* ---- 新 getter（全部委托到 mtf_01_stream） ---- */
+
+bool mtf_01_get_latest_sample(MtfSample *out, uint32_t now_ms)
+{
+	return mtf_01_stream_take_sample(out, now_ms);
+}
+
+MtfHealth mtf_01_get_health(uint32_t now_ms)
+{
+	return mtf_01_stream_get_health(now_ms);
+}
+
+bool mtf_01_is_flow_usable(uint32_t now_ms)
+{
+	return mtf_01_stream_is_flow_usable(now_ms);
+}
+
+void mtf_01_get_diagnostics(MtfDiagnostics *out)
+{
+	mtf_01_stream_get_diagnostics(out);
+}
+
+/* ---- 兼容旧 micolink_rx_ok() ---- */
+
+bool micolink_rx_ok(void)
+{
+	uint32_t now = getGlobalTime();
+	MtfSample s;
+	if (mtf_01_stream_take_sample(&s, now)) {
+		/* 200ms 内有样本视为有效（兼容旧调用语义） */
+		if (now - s.received_ms < 200u) {
+			/* 同步 payload 全局变量 */
+			memcpy(&payload, &s.payload, sizeof(payload));
+			return true;
+		}
+	}
+	return false;
 }
 
 /*
@@ -71,54 +162,6 @@ void mtf_01_task(void *argument)
 飞控中只需要将光流速度值*高度，即可得到真实水平位移速度
 计算公式：实际速度(cm/s)=光流速度*高度(m)
 */
-
-bool micolink_parse_char(MICOLINK_MSG_t* msg, uint8_t data);
-
-void micolink_decode(uint8_t data)
-{
-    static MICOLINK_MSG_t msg;
-
-    if(micolink_parse_char(&msg, data) == false)
-        return;
-    
-    switch(msg.msg_id)
-    {
-        case MICOLINK_MSG_ID_RANGE_SENSOR:
-        {
-            memcpy(&payload, msg.payload, msg.len);
-
-            /*
-                此处可获取传感器数据:
-            
-                距离        = payload.distance;
-                强度        = payload.strength;
-                精度        = payload.precision;
-                距离状态    = payload.tof_status;
-                光流速度x轴 = payload.flow_vel_x;
-                光流速度y轴 = payload.flow_vel_y;
-                光流质量    = payload.flow_quality;	
-                光流状态    = payload.flow_status;
-            */
-           rx_flag = true;
-//			LOG_INFO_IT("距离:%d,光流速度x轴:%d",payload.distance,payload.flow_vel_x);
-            break;
-        } 
-
-        default:
-            break;
-        }
-}
-
-bool micolink_rx_ok(void)
-{
-    if(rx_flag)
-    {
-        rx_flag = false;
-        return true;
-    }
-    return false;
-}
-
 
 bool micolink_check_sum(MICOLINK_MSG_t* msg)
 {

@@ -10,7 +10,7 @@ extern float debug_xy_velocity_pid_count;
 extern float debug_target_angle_pitch;
 extern float debug_target_angle_roll;
 extern float debug_target_angle_yaw;
-extern float debug_desired_yaw;
+extern float debug_yaw_rate_target;      /* 最终 yaw 目标角速度 deg/s */
 extern float debug_yaw_meas_cont;      /* yaw_meas_cont 镜像, 供地面站遥测 */
 extern state_t state;
 extern MotorCtrl debugEsc;
@@ -19,6 +19,5 @@ void ResetFlightControlPIDs(void);
 float getAltholdThrust(void);
 float getThrustCmd(void);
 void Control_Task(void *param);
-float getYawMeasCont(void);
 
 #endif

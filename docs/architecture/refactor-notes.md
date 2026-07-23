@@ -721,3 +721,22 @@
   - 静态：编译通过、UTF-8、LF 不变。
   - 拆桨测试：杆回中后 `Desired_yaw` 不变（可串口观测 `debug_target_angle_yaw`）；外力推动机身应观察到角度环输出非零、机身有恢复力矩。
   - RC 断连测试：断开遥控器 500ms 后应见 yaw setpoint 归零；>5s 自动降落后 yaw 中性。
+
+
+## 第四十三阶段:MTF-01 光流可靠性闭环(待实施)
+
+- 目标文件:`user/module/mtf01/mtf_01.c/.h`、`user/hardware/usart/usart_port.c/.h`、`user/abstract/position.c/.h`(需要时)。
+- 任务周期 / 优先级 / 栈 / 创建顺序:不变。
+- 控制算法:不动 PID; 不引入 IMU 惯性预测或 INAV 融合。
+- 实施时机:设计文档 review 通过后用 `writing-plans` 拆步骤; 当前仅做文档登记。
+- 验收方式:设计 review 批准后再写; 验证结果待实施完成后回填。
+
+
+## 第四十四阶段:MTF-01 后续阶段路线图(待实施)
+
+- 路线图:`docs/superpowers/plans/2026-07-23-mtf01-future-stages-roadmap.md`。
+- 范围:F-1~F-5 五个后续阶段(质量阈值/高度融合/加速度验证/IMU 预测/INAV 双残差)。
+- 任务周期 / 优先级 / 栈 / 创建顺序: 不变。
+- 控制算法: 不动 PID; 不引入 EKF; 不替换 JY901P(除非 F-3 决策要求)。
+- 实施时机: 每个阶段独立设计 + 计划 + 提交, 不与其它阶段混改; 当前仅做文档登记。
+- 验收方式: 每个阶段独立 review; 验证结果待实施完成后回填。

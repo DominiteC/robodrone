@@ -14,15 +14,13 @@
 #include "log.h"
 #include "change.h"
 #include "Mydelay.h"
-#include "watchdog_guard.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
 
 #define limit(x, min, max) ((x)<(min)?(min):((x)>(max)?(max):(x)))
 
 #define ALTHOLD_THRUST_BASE 49.0f //悬停使用的基准油门
-#define YAW_RATE_LIMIT  80.0f				// yaw角速率限制 deg/s
+#define YAW_RATE_LIMIT  40.0f				// yaw角速率限制 deg/s
 #define YAW_DEADBAND	5.0f				// yaw杆死区
 
 static float thrustLpf = 35;	/*油门低通*/
@@ -32,11 +30,6 @@ static float Desired_yaw = 0.0f;          /* 期望 yaw 角度, ±180° 包裹 (
 static bool  yaw_needs_init = true;     /* 起飞后首次进 Yaw_Control 时锁存 JY901P 当前航向 */
 static bool  yaw_stick_active = false;   /* 杆量激活标志 */
 static float yaw_rate_target = 0.0f;     /* 期望 yaw 角速率目标值 */
-/* 飞控自积分 yaw 角度 (仅遥测/调试, 不进控制闭环).
-   JY901P state->angle.yaw 天然 ±180°, 角度环直接用它, 不再依赖此积分. */
-float yaw_meas_cont = 0.0f;
-/* 野点防护: 单拍积分增量 > YAW_INTEG_MAX 度/拍 则丢掉当拍 */
-#define YAW_INTEG_MAX_PER_STEP   5.0f
 /* yaw 杆 LPF (与 MiniFly ctrlValLpf.yaw 相同思路): 松手后平滑衰减, 避免 Desired_yaw 突停 */
 static float lpf_stick_yaw = 0.0f;
 static float target_angle_pitch = 0.0f;
@@ -45,7 +38,7 @@ float debug_xy_velocity_pid_count = 0.0f;
 float debug_target_angle_pitch = 0.0f;
 float debug_target_angle_roll = 0.0f;
 float debug_target_angle_yaw = 0.0f;
-float debug_desired_yaw = 0.0f;             /* unfolded target yaw (continuous) */
+float debug_yaw_rate_target = 0.0f;       /* 最终 yaw 目标角速度 deg/s，供地面站遥测 */
 float debug_yaw_meas_cont = 0.0f;          /* yaw_meas_cont snapshot for telemetry */
 
 static MotorCtrl control;
@@ -54,8 +47,6 @@ setpoint_t target;
 state_t state;
 
 static void ResetYawState(void);
-static void Yaw_Unwrap_Debug(state_t* state);
-
 void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick);
 void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick);
 float Height_Control(setpoint_t* target, state_t* state,uint32_t tick);
@@ -63,8 +54,6 @@ float Height_Control(setpoint_t* target, state_t* state,uint32_t tick);
 void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state);
 void Walk_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state);
 
-
-static float wrapYawDisplay(float yaw);
 
 static void ResetYawState(void)
 {
@@ -74,34 +63,13 @@ static void ResetYawState(void)
     yaw_needs_init = true;
     yaw_stick_active = false;
     yaw_rate_target = 0.0f;
+    debug_yaw_rate_target = 0.0f;
     debug_target_angle_yaw = 0.0f;
     lpf_stick_yaw = 0.0f;
     PID_ClearIntegral(&pid_yaw_angle);
     PID_ClearIntegral(&pid_yaw_rate);
 }
 
-/* Ground yaw unfold debug - independent from flight control, tracks yaw continuously */
-/* debug 用: 仍跟踪 JY901P 内部 state.angle.yaw 的展开值, 纯显示用, 不进控制 */
-static float debug_yawOld = 0.0f;
-static int32_t debug_yawTurnNum = 0;
-static bool debug_yawUnwrapInited = false;
-
-static void Yaw_Unwrap_Debug(state_t* state)
-{
-    if (!debug_yawUnwrapInited)
-    {
-        debug_yawOld = state->angle.yaw;
-        debug_yawUnwrapInited = true;
-    }
-    float diff = state->angle.yaw - debug_yawOld;
-    if (diff > 180.0f)
-        debug_yawTurnNum--;
-    else if (diff < -180.0f)
-        debug_yawTurnNum++;
-    debug_yawOld = state->angle.yaw;
-
-    debug_desired_yaw = state->angle.yaw + debug_yawTurnNum * 360.0f;
-}
 
 void ResetFlightControlPIDs(void)
 {
@@ -237,7 +205,7 @@ void Flight_Update(MotorCtrl* ctrl, setpoint_t* target, state_t* state)
     {
         ResetFlightControlPIDs();
         (void)Height_Control(target,state,tick);
-        Yaw_Unwrap_Debug(state);  /* track unwrapped yaw on ground */
+
     }
 
 
@@ -341,6 +309,9 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
         PIDCalculate(&pid_pitch_angle, state->angle.pitch, target_angle_pitch);
         PIDCalculate(&pid_roll_angle, state->angle.roll, target_angle_roll);
         
+        /* 外环输出写入 setpoint，内环从 setpoint 读（不再直接读 PID 内部字段） */
+        target->attitudeRate.pitch = pid_pitch_angle.Output;
+        target->attitudeRate.roll  = pid_roll_angle.Output;
 
         // LOG_DEBUG("state-pit:%.2f,set-pit:%.2f,output:%.2f",state->angle.pitch,target_angle_pitch,pid_pitch_angle.Output);
     }
@@ -349,8 +320,8 @@ void Roll_Pitch_Control(setpoint_t* target, state_t* state, uint32_t tick)
     {
         // 角速度环
         
-        PIDCalculate(&pid_pitch_rate, state->gyro.y, pid_pitch_angle.Output);
-        PIDCalculate(&pid_roll_rate, state->gyro.x, pid_roll_angle.Output);
+        PIDCalculate(&pid_pitch_rate, state->gyro.y, target->attitudeRate.pitch);
+        PIDCalculate(&pid_roll_rate, state->gyro.x, target->attitudeRate.roll);
         
 
         // LOG_DEBUG("state-pit-rate:%.2f,set-pit-rate:%.2f,output:%.2f",state->gyro.y,pid_pitch_angle.Output,pid_pitch_rate.Output);
@@ -390,19 +361,11 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
     {
         float raw_stick = -target->angle.yaw;
 
-        /* 飞控自积分 yaw (仅保留用于调试对比, 不进闭环).
-           遥测发送控制实际使用的 JY901P state->angle.yaw. */
-        float yaw_step = state->gyro.z * ANGEL_PID_DT;
-        if (fabsf(yaw_step) < YAW_INTEG_MAX_PER_STEP)
-        {
-            yaw_meas_cont += yaw_step;
-        }
-
         /* LPF 平滑杆量 (与 MiniFly commander.c:117 ctrlValLpf.yaw 思路一致).
            alpha=0.2 @250Hz → τ≈20ms (MiniFly α=0.2 @100Hz → τ≈50ms). */
         lpf_stick_yaw += (raw_stick - lpf_stick_yaw) * 0.2f;
 
-        bool stick_active_now = (fabsf(lpf_stick_yaw) > YAW_DEADBAND);
+        bool stick_active_now = (fabsf(raw_stick) > YAW_DEADBAND);
 
         if (stick_active_now)
         {
@@ -428,55 +391,18 @@ void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
 
         yaw_stick_active = stick_active_now;
         debug_target_angle_yaw = Desired_yaw;
+        debug_yaw_rate_target = yaw_rate_target;
+
+        /* yaw 外环输出写入 setpoint（拨杆时 = 直接角速率，回中时 = 角度环输出） */
+        target->attitudeRate.yaw = yaw_rate_target;
     }
 
     if (RATE_DO_EXECUTE(RATE_PID_RATE,tick))
     {
         // 角速度环
-        PIDCalculate(&pid_yaw_rate, state->gyro.z, yaw_rate_target);
+        PIDCalculate(&pid_yaw_rate, state->gyro.z, target->attitudeRate.yaw);
     }
 }
-
-
-//void Yaw_Control(setpoint_t* target, state_t* state, uint32_t tick)
-//{
-//    static float yaw_target = 0.0f;   // 期望 yaw 角（deg，连续）
-//    static float yaw_meas_cont = 0.0f;
-//    static float last_yaw = 0.0f;
-//    static int32_t turnNum = 0;
-
-//    /* ---------- yaw 角度展开 ---------- */
-//    float yaw_now = state->angle.yaw;
-
-//    if (yaw_now - last_yaw > 300.0f)
-//        turnNum--;
-//    else if (yaw_now - last_yaw < -300.0f)
-//        turnNum++;
-
-//    last_yaw = yaw_now;
-//    yaw_meas_cont = yaw_now + 360.0f * turnNum;
-
-//    /* ---------- 角度环（ANGEL_PID_RATE） ---------- */
-//    if (RATE_DO_EXECUTE(ANGEL_PID_RATE, tick))
-//    {
-//        /* RC yaw 输入 → 期望 yaw 角速度（deg/s） */
-//        float yaw_rate_cmd = target->angle.yaw;  
-//        // 建议：target->angle.yaw ∈ [-150, 150] deg/s
-
-//        /* 积分得到期望 yaw 角 */
-//        yaw_target += yaw_rate_cmd * ANGEL_PID_DT;
-
-//        PIDCalculate(&pid_yaw_angle, yaw_meas_cont, yaw_target);
-//    }
-
-//    /* ---------- 角速度环（RATE_PID_RATE） ---------- */
-//    if (RATE_DO_EXECUTE(RATE_PID_RATE, tick))
-//    {
-//        PIDCalculate(&pid_yaw_rate,
-//                     state->gyro.z,              // 实际 yaw 角速度（deg/s）
-//                     pid_yaw_angle.Output);      // 角度环输出作为期望角速度
-//    }
-//}
 
 
 /**
@@ -614,20 +540,7 @@ float getThrustCmd(void)
     return thrustCmd;
 }
 
-float getYawMeasCont(void)
-{
-    return yaw_meas_cont;
-}
 
-static float wrapYawDisplay(float yaw)
-{
-    yaw = fmodf(yaw + 180.0f, 360.0f);
-    if (yaw < 0.0f)
-    {
-        yaw += 360.0f;
-    }
-    return yaw - 180.0f;
-}
 
 /**
  * @brief 陆行模式控制

@@ -1,8 +1,17 @@
 #include "position.h"
 #include "mtf_01.h"
+#include "mtf_01_stream.h"
 #include "globalTime.h"
 #include "C_code_Log.h"
+#include "PIDcontroller.h"
+#include "control_pid.h"
+#include "jy901p.h"
 #include <math.h>
+
+/* ---- IMU 短时预测参数 ---- */
+#define IMU_PRED_BLEND_WEIGHT   0.15f   /* 光流正常时 IMU 融合权重 */
+#define IMU_PRED_MAX_DT         0.30f   /* 纯预测最大持续时间(s) */
+#define IMU_GRAVITY             980.665f /* 重力加速度 cm/s² */
 
 float_velocity velocity;
 static float height_compensated = 0.0f;
@@ -24,6 +33,12 @@ static bool pos_initialized = false;
 #define POSITION_LOG_INTERVAL_MS       100U
 
 void position_Update(const float_angle* angle, const float_gyro* gyro);
+
+/* ---- IMU 短时预测状态（文件级，供 ResetFlowState 访问）---- */
+static uint32_t last_imu_ms = 0U;
+static float    imu_pred_vx = 0.0f;
+static float    imu_pred_vy = 0.0f;
+static float    imu_pred_dt_total = 0.0f;
 
 void position_ResetXY(void)
 {
@@ -115,13 +130,37 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
     static float last_tan_pitch = 0.0f;
     static float last_tan_roll = 0.0f;
 
-    if (micolink_rx_ok())
+    uint32_t now = getGlobalTime();
+    MtfSample s;
+    bool have_sample = mtf_01_get_latest_sample(&s, now);
+    bool flow_valid = mtf_01_is_flow_usable(now);
+
+    /* ---- IMU 短时预测（加速度积分）---- */
+    float imu_dt = 0.0f;
+    if (last_imu_ms != 0U) {
+        imu_dt = (now - last_imu_ms) / 1000.0f;
+        if (imu_dt > 0.0f && imu_dt < IMU_PRED_MAX_DT) {
+            float acc_x = stcAcc.a[0] * 100.f; /* m/s² → cm/s² */
+            float acc_y = stcAcc.a[1] * 100.f;
+            float pitch_rad = stcAngle.Angle[1] * DEG_TO_RAD;
+            float roll_rad  = stcAngle.Angle[0] * DEG_TO_RAD;
+
+            /* 重力补偿：剔除倾斜引起的重力分量 */
+            float acc_hx = acc_x - IMU_GRAVITY * sinf(pitch_rad);
+            float acc_hy = acc_y + IMU_GRAVITY * sinf(roll_rad);
+
+            /* 积分得到 IMU 预测速度 */
+            imu_pred_vx += acc_hx * imu_dt;
+            imu_pred_vy += acc_hy * imu_dt;
+        }
+    }
+    last_imu_ms = now;
+
+    if (have_sample)
     {
-        uint32_t now = getGlobalTime();
-        uint32_t distance_raw = payload.distance;
+        uint32_t distance_raw = s.payload.distance;
         uint32_t distance_filtered = (uint32_t)(kalmanFilter_A((float)distance_raw) + 0.5f);
         bool tof_valid = (distance_raw > 0U) && (distance_filtered > 0U);
-        bool flow_valid = tof_valid;
 
         float raw_vx = 0.0f;
         float raw_vy = 0.0f;
@@ -174,10 +213,18 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
                     }
                 }
 
-                raw_vy = - payload.flow_vel_x * (distance_filtered / 1000.0f); // cm/s
-                raw_vx = payload.flow_vel_y * (distance_filtered / 1000.0f); // cm/s
+                raw_vx =   s.payload.flow_vel_y * (distance_filtered / 1000.0f); // cm/s, 前进(pitch)
+                raw_vy = - s.payload.flow_vel_x * (distance_filtered / 1000.0f); // cm/s, 左右(roll)
                 final_vx = raw_vx * tilt_factor;
                 final_vy = raw_vy * tilt_factor;
+
+                /* IMU 预测融合：光流为主，IMU 为辅 */
+                imu_pred_dt_total = 0.0f;
+                final_vx += IMU_PRED_BLEND_WEIGHT * (imu_pred_vx - final_vx);
+                final_vy += IMU_PRED_BLEND_WEIGHT * (imu_pred_vy - final_vy);
+                /* 同步 IMU 预测到融合结果，避免切换跳变 */
+                imu_pred_vx = final_vx;
+                imu_pred_vy = final_vy;
 
 #if POSITION_USE_ANGLE_DIFF_COMP
                 if (angle_valid && angle_comp_initialized && (xy_dt > 0.0f))
@@ -234,9 +281,18 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
             }
             else
             {
-                decay_xy_velocity();
-                final_vx = velocity.x;
-                final_vy = velocity.y;
+                /* 光流失效：IMU 短时预测 + 超时衰减 */
+                imu_pred_dt_total += imu_dt;
+                if (imu_pred_dt_total < IMU_PRED_MAX_DT) {
+                    final_vx = imu_pred_vx;
+                    final_vy = imu_pred_vy;
+                } else {
+                    /* 超时：衰减归零 */
+                    imu_pred_vx *= 0.9f;
+                    imu_pred_vy *= 0.9f;
+                    final_vx = imu_pred_vx;
+                    final_vy = imu_pred_vy;
+                }
                 last_xy_time = 0U;
                 angle_comp_initialized = false;
             }
@@ -290,4 +346,21 @@ void position_Update(const float_angle* angle, const float_gyro* gyro)
 //                     final_vy);
         }
     }
+}
+
+bool position_IsXYFlowValid(void)
+{
+    return mtf_01_is_flow_usable(getGlobalTime());
+}
+
+void position_ResetFlowState(void)
+{
+    mtf_01_stream_init(getGlobalTime());
+    position_ResetXY();
+    velocity.x = 0.0f;
+    velocity.y = 0.0f;
+    imu_pred_vx = 0.0f;
+    imu_pred_vy = 0.0f;
+    imu_pred_dt_total = 0.0f;
+    last_imu_ms = 0U;
 }
