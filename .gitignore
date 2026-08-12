@@ -1,0 +1,82 @@
+*.uvguix.*
+
+doc/
+# Prerequisites
+*.d
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+*.crf
+*.dep
+*.build_log.htm
+*.htm
+*.lst
+*.axf
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+*.lnp
+*.sct
+*.iex
+GPUCache
+DebugConfig
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+.vscode/*
+.idea/
+**/.vscode/*
+
+**/.clangd
+**/compile_commands.json
+
+# MDK-ARM build files
+MDK-ARM/project/
+MDK-ARM/JLinkLog.txt
+MDK-ARM/JLinkSettings.ini
+
+# DSP libraries (pre-compiled)
+Middlewares/ST/ARM/DSP/Lib/
+
+!arm_cortexM4l_math.lib

@@ -1,0 +1,29 @@
+VIBRATION SPECTRUM ANALYSIS REPORT
+============================================================
+
+Data file: vibration_1775635117.csv
+Sampling frequency: 200.00 Hz
+Total time: 65.88 s
+
+SIGNIFICANT FREQUENCY PEAKS:
+------------------------------------------------------------
+
+X-axis:
+  Peak 1: 0.26 Hz, Energy: 0.40%
+  Peak 2: 0.64 Hz, Energy: 0.34%
+  Peak 3: 1.15 Hz, Energy: 0.26%
+  Peak 4: 1.84 Hz, Energy: 1.52%
+  Peak 5: 2.14 Hz, Energy: 8.19%
+
+Y-axis:
+  Peak 1: 0.12 Hz, Energy: 0.44%
+  Peak 2: 0.50 Hz, Energy: 0.75%
+  Peak 3: 0.80 Hz, Energy: 1.48%
+  Peak 4: 1.14 Hz, Energy: 1.21%
+  Peak 5: 1.46 Hz, Energy: 0.50%
+  Peak 6: 1.84 Hz, Energy: 0.84%
+  Peak 7: 2.14 Hz, Energy: 8.67%
+
+Z-axis:
+  Peak 1: 0.11 Hz, Energy: 39.92%
+  Peak 2: 0.44 Hz, Energy: 0.37%
