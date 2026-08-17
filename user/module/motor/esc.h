@@ -15,7 +15,6 @@
 void ESC_Init(void);
 void ESC_Set_PWM(uint16_t PWM_1,uint16_t PWM_2,uint16_t PWM_3,uint16_t PWM_4);
 void ESC_Set_Percent(float percent_1,float percent_2,float percent_3,float percent_4);
-void ESC_Calibrate(void);
 void ESC_Test(void);
 
 #endif

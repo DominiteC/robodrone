@@ -1916,6 +1916,21 @@
               <FilePath>..\user\services\commander.c</FilePath>
             </File>
             <File>
+              <FileName>commander_persist.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\services\commander_persist.c</FilePath>
+            </File>
+            <File>
+              <FileName>commander_arbitration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\services\commander_arbitration.c</FilePath>
+            </File>
+            <File>
+              <FileName>commander_takeoff_land.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\services\commander_takeoff_land.c</FilePath>
+            </File>
+            <File>
               <FileName>remotedata.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\services\remotedata.h</FilePath>

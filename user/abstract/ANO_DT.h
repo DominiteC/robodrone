@@ -24,7 +24,9 @@ typedef struct
 
 }dt_flag_t;
 
-extern dt_flag_t f;
+//-------------------------ANO 发送标志-----------------------------------
+extern dt_flag_t f;                         /* 地面站数据发送标志位 (各帧类型独立控制) */
+//-------------------------ANO 发送标志-----------------------------------
 
 typedef volatile int16_t vint16_t;
 typedef volatile int32_t vint32_t;
@@ -61,7 +63,7 @@ void ANO_DT_CallBack(void* this);
 
 
 // 自定义 RCData 帧 - 使用 float 类型发送（解决负数显示问题）
-void ANO_DT_Send_RCDataFloat(float yaw, float roll, float pitch, float x_velocity_output, float y_velocity_output, float target_height, float velocity_x, float velocity_y, float velocity_z, float target_vel_x, float target_vel_y, float acc_z);
+void ANO_DT_Send_RCDataFloat(float roll_rate_target, float roll_rate_meas, float roll_angle_target, float roll_angle_meas, float pitch_rate_target, float pitch_rate_meas, float pitch_angle_target, float pitch_angle_meas, float yaw_angle_target, float yaw_angle_meas, float yaw_rate_target, float yaw_rate_meas);
 
 #endif
 

@@ -14,6 +14,14 @@ void position_ResetXY(void);
 bool position_IsXYFlowValid(void);
 void position_ResetFlowState(void);
 
-extern float_velocity velocity;
+//-------------------------速度全局变量-----------------------------------
+extern float_velocity velocity;             /* 飞行器三轴速度 (cm/s), 由 position 模块维护 */
+//-------------------------速度全局变量-----------------------------------
+
+//-------------------------Predict 调试变量 (供 ANO_DT 遥测)-----------------
+extern float debug_acc_hx;                  /* 重力补偿后水平加速度 X (cm/s²), Predict 输入 */
+extern float debug_acc_hy;                  /* 重力补偿后水平加速度 Y (cm/s²) */
+extern float debug_flow_residual_x;         /* 光流位置残差 X (cm) */
+//-------------------------Predict 调试变量-----------------------------------
 
 #endif

@@ -134,6 +134,7 @@ void PIDInit(PIDInstance *pid, PID_Init_Config_s *config)
     pid->Intergral_Separate = config->Intergral_Separate;
     pid->DeltaT_Limit_Max = config->DeltaT_Limit_Max;
     pid->DeltaT_Limit_Min = config->DeltaT_Limit_Min;
+    pid->NominalDt = config->NominalDt;
     
     // 初始化时间戳
     GetDeltaT(&pid->lastTime);
@@ -149,14 +150,35 @@ void PIDInit(PIDInstance *pid, PID_Init_Config_s *config)
 float PIDCalculate(PIDInstance *pid, float measure, float ref)
 {
 
-    pid->dt = GetDeltaT(&pid->lastTime); // 获取两次pid计算的时间间隔,用于积分和微分
+    // P2: 默认使用固定 nominal dt，避免 HAL_GetTick 1ms 量化误差导致 D 项抖动
+    {
+        uint32_t now = HAL_GetTick();
+        uint32_t tick_diff = now - pid->lastTime;
+        pid->lastTime = now;
+        // 实际间隔 > nominal*2 视为明显超期（HAL_GetTick 1ms 量化抖动不会触发此阈值）
+        uint8_t dt_timeout = (tick_diff > (uint32_t)(pid->NominalDt * 2000.0f));
+        pid->dt = dt_timeout ? (float)tick_diff / 1000.0f : pid->NominalDt;
+        pid->dt_timeout = dt_timeout;
+    }
     if(pid->Improve & PID_DeltaT_Limit)
-        f_DeltaT_Limit(pid); // 时间间隔限幅
+        f_DeltaT_Limit(pid); // 时间间隔限幅（超期时防止 dt 过大导致 I 项失控）
 
     // 保存上次的测量值和误差,计算当前error
     pid->Measure = measure;
     pid->Ref = ref;
     pid->Err = pid->Ref - pid->Measure;
+
+    // P0: 首次计算只建立历史基线，不输出 D 项，避免 (0-Measure)/dt 或 (Err-0)/dt 产生虚假尖峰
+    if (!pid->initialized)
+    {
+        pid->Last_Measure = pid->Measure;
+        pid->Last_Err     = pid->Err;
+        pid->Last_Dout    = 0;
+        pid->Last_ITerm   = 0;
+        pid->Last_Output  = pid->Output;
+        pid->initialized  = 1;
+        return pid->Output;
+    }
 
     // 如果在死区外,则计算PID
     if (fabsf(pid->Err) >= pid->DeadBand)
@@ -164,7 +186,22 @@ float PIDCalculate(PIDInstance *pid, float measure, float ref)
         // 基本的pid计算,使用位置式
         pid->Pout = pid->Kp * pid->Err;
         pid->ITerm = pid->Ki * pid->Err * pid->dt;
-        pid->Dout = pid->Kd * (pid->Err - pid->Last_Err) / pid->dt;
+
+        // P2: 超期时跳过 D 项全部计算，避免错误微分
+        if (pid->dt_timeout)
+        {
+            pid->Dout = 0;
+        }
+        else
+        {
+            pid->Dout = pid->Kd * (pid->Err - pid->Last_Err) / pid->dt;
+            // 微分先行
+            if (pid->Improve & PID_Derivative_On_Measurement)
+                f_Derivative_On_Measurement(pid);
+            // 微分滤波器
+            if (pid->Improve & PID_DerivativeFilter)
+                f_Derivative_Filter(pid);
+        }
 
         // 梯形积分
         if (pid->Improve & PID_Trapezoid_Intergral)
@@ -175,12 +212,6 @@ float PIDCalculate(PIDInstance *pid, float measure, float ref)
         // 积分分离
         if (pid->Improve & PID_Integral_Separate)
             f_Integral_Separate(pid);
-        // 微分先行
-        if (pid->Improve & PID_Derivative_On_Measurement)
-            f_Derivative_On_Measurement(pid);
-        // 微分滤波器
-        if (pid->Improve & PID_DerivativeFilter)
-            f_Derivative_Filter(pid);
         // 积分限幅
         if (pid->Improve & PID_Integral_Limit)
             f_Integral_Limit(pid);
@@ -226,6 +257,17 @@ void PID_ClearIntegral(PIDInstance *pid)
     pid->Last_ITerm = 0;
 }
 
+/**
+ * @brief P1: 旁路 PID 重新启用前的状态同步。
+ *        更新时间戳防止 dt 异常，触发下次 PIDCalculate 重新建基线（不输出 D 项）。
+ * @note  不清零积分/输出，适用于模式切换（如速度模式→定点模式）。
+ */
+void PID_PrepareReengage(PIDInstance *pid)
+{
+    GetDeltaT(&pid->lastTime);  // 同步时间戳，避免下次 dt 过大
+    pid->initialized = 0;       // 触发下次计算重新建基线
+}
+
 void PID_Reset(PIDInstance *pid)
 {
     pid->Measure = 0;
@@ -243,6 +285,7 @@ void PID_Reset(PIDInstance *pid)
     pid->Last_Dout = 0;
     pid->Last_ITerm = 0;
     GetDeltaT(&pid->lastTime);
+    pid->initialized = 0;   // P0: 下次 PIDCalculate 第一拍只建基线，不输出 D
 }
 
 /**

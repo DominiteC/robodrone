@@ -52,7 +52,9 @@ struct Servo{
   }Info2;
 };
 
-struct Servo gl_servo[SERVO_NUM];
+//-------------------------舵机全局数组-----------------------------------
+struct Servo gl_servo[SERVO_NUM];  /* 舵机全局数组 (存储各舵机编号/角度/模式/TIM或GPIO参数) */
+//-------------------------舵机全局数组-----------------------------------
 static uint16_t calServoAngle(float angle, uint16_t maxAngle);
 static void setServoAngle(struct Servo* servo, float angle);
 static void setServo(struct Servo *servo,uint8_t servoNum, uint16_t angle, uint16_t maxAngle, enum ServoMode mode, void *Info1, uint32_t Info2){

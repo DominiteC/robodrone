@@ -21,7 +21,9 @@
 #define WHEEL_OSCILLATE_PWM            400   // 轮子振荡 PWM 幅度
 #define WHEEL_OSCILLATE_HALF_PERIOD_MS 500   // 半周期 ms
 
-static ServoMode servo_mode = SERVO_AIRPLANE;
+//-------------------------舵机模式状态-----------------------------------
+static ServoMode servo_mode = SERVO_AIRPLANE;  /* 当前舵机模式 (飞行/陆行/45度陆行) */
+//-------------------------舵机模式状态-----------------------------------
 
 static bool ServoWaitTimedOut(TickType_t startTick, const char* tag)
 {
@@ -419,7 +421,9 @@ void changeAttitude(MotorCtrl* ctrl, state_t* state)
         return;
     }
 
-    static uint8_t flag = 0;
+//-------------------------变形状态机-----------------------------------
+    static uint8_t flag = 0;  /* 变形状态机步骤: 0→清输出, 1→执行变形 */
+//-------------------------变形状态机-----------------------------------
     switch (flag)
     {
     case 0:

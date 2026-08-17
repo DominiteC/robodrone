@@ -113,7 +113,9 @@ int fputc(int ch, FILE *f) {
 /******************************************************************************************/
 
 #if USART_EN_RX /*如果使能了接收*/
-USART_Data *usartDataHead_handle = NULL;  // 串口数据结构体链表头
+//-------------------------USART 数据结构体链表头-----------------------------------
+USART_Data *usartDataHead_handle = NULL;  /* 所有 USART 数据实例的链表头 (用于中断统一分发) */
+//-------------------------USART 数据结构体链表头-----------------------------------
 static int USART_DataAttach(USART_Data *this);
 #if USART_MALLOC == 1
 /// @brief 初始化串口数据类型

@@ -70,34 +70,16 @@ void ESC_Set_PWM(uint16_t PWM_1,uint16_t PWM_2,uint16_t PWM_3,uint16_t PWM_4)
  */
 void ESC_Set_Percent(float percent_1,float percent_2,float percent_3,float percent_4)
 {
-	uint16_t pulse_1 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_1,0,95) * 0.01 + ESC_MIN_THROTTLE;
-	uint16_t pulse_2 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_2,0,95) * 0.01 + ESC_MIN_THROTTLE;
-	uint16_t pulse_3 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_3,0,95) * 0.01 + ESC_MIN_THROTTLE;
-	uint16_t pulse_4 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_4,0,95) * 0.01 + ESC_MIN_THROTTLE;
+	uint16_t pulse_1 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_1,0,100) * 0.01 + ESC_MIN_THROTTLE;
+	uint16_t pulse_2 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_2,0,100) * 0.01 + ESC_MIN_THROTTLE;
+	uint16_t pulse_3 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_3,0,100) * 0.01 + ESC_MIN_THROTTLE;
+	uint16_t pulse_4 = (ESC_MAX_THROTTLE - ESC_MIN_THROTTLE) * limit(percent_4,0,100) * 0.01 + ESC_MIN_THROTTLE;
 	// if (myDelay((uint32_t)ESC_Set_Percent,100))
 	// 	LOG_DEBUG("ESC percent: %.2f%%,%.2f%%,%.2f%%,%.2f%% -> PWM: %d,%d,%d,%d",percent_1,percent_2,percent_3,percent_4,
 	// 				pulse_1,pulse_2,pulse_3,pulse_4);
 	ESC_Set_PWM(pulse_1,pulse_2,pulse_3,pulse_4);
 }
 
-/**
- * @brief 电调校准
- * 
- */
-void ESC_Calibrate(void)
-{
-	// 设置成最大油门
-	ESC_Set_PWM(ESC_MAX_THROTTLE,ESC_MAX_THROTTLE,ESC_MAX_THROTTLE,ESC_MAX_THROTTLE);
-	LOG_INFO("ESC设置为最大油门,等待2秒之后开始校准");
-	uint8_t delay_time = 4;
-	while (delay_time--)
-	{
-		LOG_INFO("等待%d秒",delay_time+1);
-		HAL_Delay(1000);
-	}
-	ESC_Set_PWM(ESC_MIN_THROTTLE,ESC_MIN_THROTTLE,ESC_MIN_THROTTLE,ESC_MIN_THROTTLE);
-	LOG_INFO("ESC设置为最小油门,校准结束");
-}
 
 
 void ESC_Test(void)

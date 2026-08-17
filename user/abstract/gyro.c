@@ -22,15 +22,17 @@
 
 //#include "usart_send.h"
 //extern USART_SendType this;
-static float gl_Pitch,gl_Roll,gl_Yaw;//俯仰、横滚、偏航角 (放置位置不确定)
-USART_Data gyroData;
+//-------------------------姿态角全局变量-----------------------------------
+static float gl_Pitch, gl_Roll, gl_Yaw;  /* 俯仰/横滚/偏航角 (度), 经坐标系变换后的最终姿态角 */
+//-------------------------姿态角全局变量-----------------------------------
+USART_Data gyroData;                      /* JY901P 陀螺仪串口数据接收缓冲区 (DMA 模式) */
 
 #define GYRO_ENABLE_ACC_CALI_ON_BOOT 0
 #define GYRO_ENABLE_MAG_CALI_ON_BOOT 0
 
-uint8_t pitch_init_flag = 0; // 陀螺仪pitch初始化为0标志位
-float_angle offset; //偏移值
-static float acc_z_gravity_offset = 0.0f;
+uint8_t pitch_init_flag = 0;          /* 陀螺仪 pitch 首次校准完成标志 (上电时置1) */
+float_angle offset;                   /* JY901P 上电初始角度偏移值 (用于归零初始姿态) */
+static float acc_z_gravity_offset = 0.0f;  /* 加速度计 Z 轴重力偏置 (静态校准扣除) */
 
 /* ===== 陀螺零偏自校准 (上电后静止采样) ===== */
 /* 与 MiniFly processGyroBias 思路一致：上电后用 1.0 秒采 200 帧,
@@ -41,11 +43,15 @@ static float acc_z_gravity_offset = 0.0f;
    JY901P 略大, 这里放宽到 4.0, 等同 MiniFly 4000 (他们量纲不同但思路相同) */
 #define GYRO_CALI_VAR_MAX        4.0f
 /* 兜底: 万一校准前已被调用, 也能取个合理值 */
-static float gyro_z_offset = 0.0f;
-static uint8_t gyro_z_calibrated = 0;  /* 0=未完成, 1=已校准通过 */
+//-------------------------陀螺零偏校准数据-----------------------------------
+static float gyro_z_offset = 0.0f;        /* 陀螺 Z 轴 (yaw) 零偏值 (deg/s), 上电静态采样校准 */
+static uint8_t gyro_z_calibrated = 0;     /* 陀螺 Z 轴零偏校准状态: 0=未完成, 1=已通过 */
+//-------------------------陀螺零偏校准数据-----------------------------------
 
-float32_t bufA[16], bufB[16], bufC[16];
-arm_matrix_instance_f32 T;
+//-------------------------ARM 坐标变换矩阵-----------------------------------
+float32_t bufA[16], bufB[16], bufC[16];   /* ARM DSP 库矩阵运算临时缓冲区 */
+arm_matrix_instance_f32 T;                /* 坐标变换矩阵 (JY901P 传感器系 → 机体系) */
+//-------------------------ARM 坐标变换矩阵-----------------------------------
 
 
 static void gyro_dataBufferInit(void);
@@ -73,7 +79,9 @@ void gyro_init(void) {
   LOG_INFO("gyro init");
 }
 
-static uint8_t dataBuffer[44];	// 待完善
+//-------------------------JY901P 数据缓冲区-----------------------------------
+static uint8_t dataBuffer[44];	/* JY901P 串口 DMA 接收缓冲区 (44 字节, 与传感器协议帧长对应) */
+//-------------------------JY901P 数据缓冲区-----------------------------------
 //static USART_Data gyroData;
 static void gyro_dataBufferInit(void)
 {
@@ -115,6 +123,7 @@ void gyro_calibrateGyroZOffset(void)
     float mean_x, mean_y, mean_z;
     float var_x, var_y, var_z;
     float gx, gy, gz;
+    float az, sum_az = 0.f, mean_az;
 
     /* 等 JY901P 输出稳定 (上电后 200ms) */
     gyro_calibration_delay_ms(200);
@@ -124,15 +133,24 @@ void gyro_calibrateGyroZOffset(void)
         gx = stcGyro.w[0];
         gy = stcGyro.w[1];
         gz = stcGyro.w[2];
+        az = stcAcc.a[2];   /* 同时采样 Z 轴加速度 (含重力), 用于重力偏置校准 */
 
         sum_x  += gx;  sum_x2 += gx * gx;
         sum_y  += gy;  sum_y2 += gy * gy;
         sum_z  += gz;  sum_z2 += gz * gz;
+        sum_az += az;
         cnt++;
 
         /* 5ms 间隔, 200 帧 ≈ 1.0s, 喂狗避免 1s 阻塞期间看门狗复位 */
         vTaskDelay(pdMS_TO_TICKS(5));
         WatchdogGuard_FeedNow();
+    }
+
+    mean_az = sum_az / GYRO_CALI_SAMPLES;
+    /* 静止采样下 Z 轴加速度均值即重力偏置 (≈9.8 m/s²), 供 gyro_getAcc 扣除 */
+    if (mean_az > 1.0f)
+    {
+        acc_z_gravity_offset = mean_az;
     }
 
     mean_x = sum_x / GYRO_CALI_SAMPLES;
@@ -167,9 +185,11 @@ uint8_t gyro_isGyroZCalibrated(void)
 
 /* 校准结果供地面站遥测读取, 不在中断内用 LOG_INFO 避免
    log_sprintf_buffer_lock 关中断期间 SysTick 停跑导致 IWDG 复位. */
-float  gyro_cali_offset = 0.0f;
-float  gyro_cali_var_z  = 0.0f;
-uint8_t gyro_cali_status = 0;  /* 0=未完成, 1=通过, 2=失败 */
+//-------------------------陀螺零偏调试变量 (地面站遥测)-----------------------------------
+float  gyro_cali_offset = 0.0f;          /* 校准后的 Z 轴零偏值 (deg/s), 地面站查看 */
+float  gyro_cali_var_z  = 0.0f;          /* Z 轴采样方差, 用于判断校准质量 */
+uint8_t gyro_cali_status = 0;            /* 校准结果状态: 0=未完成, 1=通过, 2=失败 */
+//-------------------------陀螺零偏调试变量 (地面站遥测)-----------------------------------
 
 static void gyro_calibration_delay_ms(uint32_t delay_ms)
 {

@@ -39,7 +39,9 @@ typedef struct _cmd_data
 	uint8_t params[5];	// 命令参数
 } CmdData;
 
-extern CtrlData RC_Control;
+//-------------------------遥控控制数据 (全局可见)-----------------------------------
+extern CtrlData RC_Control;              /* 遥控器角度/油门/模式数据 (由 RemoteData_GetData 读取) */
+//-------------------------遥控控制数据 (全局可见)-----------------------------------
 
 void RemoteData_Init(void);
 uint8_t RemoteData_GetData(CtrlData* rc_out);

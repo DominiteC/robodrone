@@ -5,230 +5,251 @@
  */
 #include "commander.h"
 #include "C_code_Log.h"
-#include "AT24Cxx.h"
 #include "alarm.h"
 #include "position.h"
 #include <math.h>
 
-#include "FreeRTOS.h"
-#include "task.h"
+/* 清 XY 位置环积分（定义在 control.c，通过 extern 避免 commander→control 反向依赖） */
+extern void flightClearPosPID(void);
 
-#define TAKEOFF_HEIGHT		60.f
-#define TAKEOFF_MIN_SPEED	5.f
-#define TAKEOFF_SLOW_ZONE	30.f
-#define LAND_MIN_SPEED		4.f
-#define LAND_SLOW_HEIGHT	35.f
-#define TAKEOFF_SPEED		15.f	// 起飞爬升速度 cm/s
-#define LAND_SPEED			15.f	// 降落下降速度 cm/s
 #define COMMANDER_DT		0.001f
 
 /* 速度优先定高参数 */
-#define PILOT_SPEED_UP		60.f	// 最大爬升速度 cm/s
-#define PILOT_SPEED_DN		40.f	// 最大下降速度 cm/s
+#define PILOT_SPEED_UP		30.f	// 最大爬升速度 cm/s
+#define PILOT_SPEED_DN		20.f	// 最大下降速度 cm/s
 #define PILOT_ACC_Z			60.f	// 垂直加速度限幅 cm/s²
 #define THR_DZ				0.08f	// 摇杆中位死区 (0~1)
 #define Z_BRAKE_VEL_DZ		5.0f
 #define Z_BRAKE_TIMEOUT_MS	400U
-#define XY_HOLD_ENABLE_HEIGHT	25.0f
-#define XY_HOLD_DISABLE_HEIGHT	20.0f
-#define XY_STICK_VEL_SCALE	6.0f
+#define XY_STICK_VEL_SCALE	4.0f
 #define XY_BRAKE_VEL_DZ		5.0f
-#define XY_BRAKE_ATT_DZ		3.0f
-#define XY_BRAKE_SETTLE_CYCLES	250U
 #define XY_BRAKE_TIMEOUT_MS	1200U
-#define EEPROM_MODE_MAGIC      0xA5U
-#define EEPROM_ADDR_MAGIC      0x00U
-#define EEPROM_ADDR_ATTI_MODE  0x01U
-#define EEPROM_ADDR_SERVO_MODE 0x02U
+#define XY_HOLD_LOOKAHEAD	0.2f
 
-static bool isRCLocked = true;				/* 遥控锁定状态 */
-static bool safetyLatched = false;          /* 姿态保护锁存，需人工清除 */
-static bool attitudeModeChanged = false;    /* 姿态模式是否发生手动切换 */
+//-------------------------安全与模式标志-----------------------------------
+static bool safetyLatched = false;          /* 姿态保护锁存 (由安全模块置位, 需手动清除) */
+static bool attitudeModeChanged = false;    /* 姿态模式是否发生手动切换 (供外部消费) */
+//-------------------------安全与模式标志-----------------------------------
 
+//-------------------------失控保护: 加速度跟踪-----------------------------------
 static float minAccZ = 0.f; 
-static float maxAccZ = 0.f;        /* 跟踪下降方向最大加速度 (cm/s^2)，用于失控保护 */
-static uint16_t maxAccZOverCnt = 0;/* 超过阈值持续计数，避免单帧抖动误触 */
-static uint16_t maxAccZWinCnt = 0; /* 跟踪窗口计数器，每 200ms 重置一次 maxAccZ */
+static float maxAccZ = 0.f;               /* 跟踪下降方向最大加速度 (cm/s²), 用于失控保护判断 */
+static uint16_t maxAccZOverCnt = 0;        /* 加速度超阈值持续计数, 避免单帧抖动误触 */
+static uint16_t maxAccZWinCnt = 0;         /* 跟踪窗口计数器, 每 200ms 重置一次 maxAccZ */
+//-------------------------失控保护: 加速度跟踪-----------------------------------
 
-static commanderBits_t commander;
+//-------------------------指挥官核心状态-----------------------------------
+static commanderBits_t commander;          /* 指挥官位域: 控制模式/姿态模式/起飞/降落/急停 */
+//-------------------------指挥官核心状态-----------------------------------
 
-/* 边沿标志：setter 置位，consumer 消费后清零 */
-static bool keyFlightRising  = false;
-static bool keyFlightFalling = false;
-static bool keyLandRising    = false;
-static bool keyLandFalling   = false;
+//-------------------------起飞/降落边沿标志-----------------------------------
+static bool keyFlightRising  = false;      /* keyFlight 0→1 上升沿 (消费后清零) */
+static bool keyFlightFalling = false;      /* keyFlight 1→0 下降沿 (消费后清零) */
+static bool keyLandRising    = false;      /* keyLand 0→1 上升沿 */
+static bool keyLandFalling   = false;      /* keyLand 1→0 下降沿 */
+//-------------------------起飞/降落边沿标志-----------------------------------
 
-static void CommanderPersist_EnsureMagic(void)
+//-------------------------定高/定点控制状态-----------------------------------
+static float holdHeight = TAKEOFF_HEIGHT;  /* 定高模式目标高度 (cm), 松杆时锁存 */
+static bool isAdjustingPosZ = false;       /* Z 轴高度调整中 (有杆输入时置位) */
+static float holdPosX = 0.f;               /* 定点模式 X 保持位置 (cm), 刹车完成后锁存 */
+static float holdPosY = 0.f;               /* 定点模式 Y 保持位置 (cm), 刹车完成后锁存 */
+static bool xyHoldActive = false;          /* XY 位置保持已激活 (锁点后置位) */
+static bool isBrakingPosXY = false;        /* XY 刹车进行中 (松杆后速度环减速) */
+static uint16_t brakePosXYTime = 0;        /* XY 刹车计时 (ms), 超时强制切位置环 */
+static bool isBrakingPosZ = false;         /* Z 轴刹车进行中 (松杆后速度环减速) */
+static uint16_t brakePosZTime = 0;         /* Z 轴刹车计时 (ms), 超时强制切位置环 */
+static float errorPosZ = 0.f;              /* Z 轴位置误差 (cm), 松杆锁高时限幅平滑 */
+//-------------------------定高/定点控制状态-----------------------------------
+
+/* ========== 内部 dispatch 函数 ========== */
+
+/** 正常飞行(起飞完成后)：摇杆爬升/下降 + 失控保护 + 刹车锁高 */
+static void setpointNormalFlight(const CtrlData *data, setpoint_t *setpoint, const state_t *state)
 {
-	uint8_t magic = 0;
-	if (AT24Cxx_Read_nByteBuf(EEPROM_ADDR_MAGIC, &magic, 1) != 0 || magic != EEPROM_MODE_MAGIC)
+	float climbRaw = (data->throttle - 50.f) / 50.f;
+	if (fabsf(climbRaw) < THR_DZ) climbRaw = 0;
+
+	float climb;
+	if (climbRaw > 0.f)
+		climb = climbRaw * PILOT_SPEED_UP;
+	else
+		climb = climbRaw * PILOT_SPEED_DN;
+
+	/* 下降到支撑架着地高度，或下降中触底撞击 -> 切一键降落触底停飞(正常停飞，不报警) */
+	if (state->height <= LAND_MIN_HEIGHT ||
+	    (climb < 0.f && state->acc.z > IMPACT_ACC_THRESHOLD && state->acc.z < IMPACT_ACC_MAX))
 	{
-		magic = EEPROM_MODE_MAGIC;
-		(void)AT24Cxx_Write_nByte_In_One_Block(EEPROM_ADDR_MAGIC, &magic, 1);
-	}
-}
-
-bool CommanderPersist_LoadModes(uint8_t *attitudeMode, uint8_t *servoMode)
-{
-	uint8_t magic = 0;
-	uint8_t at = 0;
-	uint8_t sv = 0;
-
-	if (AT24Cxx_Read_nByteBuf(EEPROM_ADDR_MAGIC, &magic, 1) != 0
-		|| AT24Cxx_Read_nByteBuf(EEPROM_ADDR_ATTI_MODE, &at, 1) != 0
-		|| AT24Cxx_Read_nByteBuf(EEPROM_ADDR_SERVO_MODE, &sv, 1) != 0)
-	{
-		return false;
-	}
-
-	if (magic != EEPROM_MODE_MAGIC || at > MODE_WALK_45 || sv > 2U)
-	{
-		return false;
-	}
-
-	*attitudeMode = at;
-	*servoMode = sv;
-	return true;
-}
-
-void CommanderPersist_SaveModes(uint8_t attitudeMode, uint8_t servoMode)
-{
-	CommanderPersist_EnsureMagic();
-	(void)AT24Cxx_Write_nByte_In_One_Block(EEPROM_ADDR_ATTI_MODE, &attitudeMode, 1);
-	(void)AT24Cxx_Write_nByte_In_One_Block(EEPROM_ADDR_SERVO_MODE, &servoMode, 1);
-}
-
-void CommanderPersist_SaveAttitudeMode(uint8_t attitudeMode)
-{
-	CommanderPersist_EnsureMagic();
-	(void)AT24Cxx_Write_nByte_In_One_Block(EEPROM_ADDR_ATTI_MODE, &attitudeMode, 1);
-}
-
-void CommanderPersist_SaveServoMode(uint8_t servoMode)
-{
-	CommanderPersist_EnsureMagic();
-	(void)AT24Cxx_Write_nByte_In_One_Block(EEPROM_ADDR_SERVO_MODE, &servoMode, 1);
-}
-
-static void commanderDropToGround(void)
-{
-	if(commander.keyFlight)	/* 飞行过程中遥控器信号断开，一键降落 */
-	{
+		setCommanderKeyFlight(false);
 		setCommanderKeyland(true);
-		setCommanderKeyFlight(false);
-	}	
-}
-/********************************************************
- *ctrlDataUpdate()	更新控制数据
- *返回0表示正常有数据，返回1表示失联，但是使用旧数据，返回2表示使用构造的假数据，返回3表示强制锁定
-*********************************************************/
-uint8_t ctrlDataUpdate(uint8_t reciveFlag)
-{
-	static uint32_t last_timestamp = 0;
-	uint32_t timestamp = xTaskGetTickCount();	
-
-	uint32_t tickNow = timestamp - last_timestamp;
-	// LOG_DEBUG("commander-tickNow:%d",tickNow);
-	if (reciveFlag)
-	{
-		last_timestamp = timestamp;
-	}
-	if (tickNow < COMMANDER_WDT_TIMEOUT_STABILIZE) 
-	{
-		isRCLocked = false;			/*解锁*/
-	}
-	else if (tickNow < COMMANDER_WDT_TIMEOUT_HOVER)
-	{
-		isRCLocked = true;			/*断连悬停：锁定但不降落*/
-	}
-    else
-	{
-		isRCLocked = true;			/*超时锁定*/
-		commanderDropToGround();
-		return 3;
-	}
-	return 0;
-}
-
-/********************************************************
-* flyerAutoLand()
-* 四轴自动降落
-*********************************************************/
-void flyerAutoLand(setpoint_t *setpoint,const state_t *state)
-{
-	static bool landInit = true;
-	static float landMinHeight = 0;
-	static uint16_t landStallCnt = 0;
-
-	if (landInit)
-	{
-		landInit = false;
-		landMinHeight = state->height;
-		landStallCnt = 0;
 	}
 
-	float landSpeed = (state->height <= LAND_SLOW_HEIGHT) ? LAND_MIN_SPEED : LAND_SPEED;
-	setpoint->vel.z = -landSpeed;
-	setpoint->height = state->height;
-	setpoint->mode_z = modeVelocity;
+	if (fabsf(climb) > 5.f)
+	{
+		/* 有杆输入：直接设置目标速度 */
+		isAdjustingPosZ = true;
+		isBrakingPosZ = false;
+		brakePosZTime = 0;
+		setpoint->mode_z = modeVelocity;
+		setpoint->vel.z = climb;
+		setpoint->height = holdHeight;
 
-	/* 高度低于14cm(架子~12cm) -> 确认着陆 */
-	if (state->height <= 14.0f)
-	{
-		landInit = true;
-		landStallCnt = 0;
-		setCommanderKeyland(false);
-		setCommanderKeyFlight(false);
-	}
-	/* 高度停滞检测：5秒内高度变化 < 2cm -> 已触地 */
-	else if (state->height < landMinHeight - 2.0f)
-	{
-		/* 仍在下降，更新最低高度 */
-		landMinHeight = state->height;
-		landStallCnt = 0;
-	}
-	else if (state->height <= landMinHeight + 2.0f && state->height < 25.0f)
-	{
-		/* 低空且高度接近最低点，累计停滞时间 */
-		if (++landStallCnt > 2000)
+		/* 失控保护：油门拉下降 + 下降加速度超阈值持续 ~0.8s 触发 */
+		if (climbRaw < -0.2f)
 		{
-			landInit = true;
-			landStallCnt = 0;
-			setCommanderKeyland(false);
-			setCommanderKeyFlight(false);
+			if (state->acc.z > maxAccZ)
+				maxAccZ = state->acc.z;
+
+			if (maxAccZ > 250.f)
+			{
+				if (++maxAccZOverCnt > 200)
+				{
+					LOG_WARN("失控保护触发: maxAccZ=%.1f cm/s^2, climbRaw=%.2f, 切一键降落",maxAccZ, climbRaw);
+					Alarm_SetMode(ALARM_MODE_ERROR);
+					setCommanderKeyFlight(false);
+					setCommanderKeyland(true);
+				}
+			}
+			else
+			{
+				maxAccZOverCnt = 0;
+			}
+		}
+	}
+	else if (isAdjustingPosZ == true)
+	{
+		/* 松杆回中：速度环刹车 → 切位置环锁高 */
+		if (isBrakingPosZ == false)
+		{
+			isBrakingPosZ = true;
+			brakePosZTime = 0;
+		}
+		setpoint->mode_z = modeVelocity;
+		setpoint->vel.z = 0;
+		if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
+		{
+			isAdjustingPosZ = false;
+			isBrakingPosZ = false;
+			brakePosZTime = 0;
+			holdHeight = state->height + errorPosZ;
+			setpoint->mode_z = modeAbs;
+		}
+		setpoint->height = holdHeight;
+	}
+	else
+	{
+		/* 位置保持 */
+		setpoint->mode_z = modeAbs;
+		setpoint->vel.z = 0;
+		errorPosZ = holdHeight - state->height;
+		errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
+		setpoint->height = holdHeight;
+	}
+
+	/* 跟踪窗口，避免 maxAccZ 长时间累积误触 */
+	if (++maxAccZWinCnt > 800)
+	{
+		maxAccZWinCnt = 0;
+		maxAccZ = 0.f;
+		maxAccZOverCnt = 0;
+	}
+}
+
+/** XY 位置控制：光流定点 + 摇杆速度 + 回中刹停锁位
+ *  状态A 拨杆: modeVelocity, 目标速度=杆量×4
+ *  状态B 刹车: modeVelocity, 目标速度=0 刹停, 速度归零或超时后带前馈锁点
+ *  状态C 保持: modeAbs, 目标位置=holdPos 固定 */
+static void setpointXY(const CtrlData *data, setpoint_t *setpoint, const state_t *state)
+{
+	(void)data;
+	if(commander.ctrlMode == MODE_THREEHOLD && commander.attitudeMode == MODE_AIRPLANE)
+	{
+		if (!position_IsXYFlowValid())
+		{
+			position_ResetFlowState();
+			xyHoldActive = false;
+			isBrakingPosXY = false;
+			brakePosXYTime = 0;
+			setpoint->mode_x = modeDisable;
+			setpoint->mode_y = modeDisable;
+			setpoint->vel.x = 0.f;
+			setpoint->vel.y = 0.f;
+		}
+		else
+		{
+			setpoint->angle.yaw *= 0.5f;
+			bool stickActive = (fabsf(setpoint->angle.roll) > 1.5f || fabsf(setpoint->angle.pitch) > 1.5f);
+			if (stickActive)
+			{
+				/* 状态A 拨杆：速度环直通，位置环旁路 */
+				xyHoldActive = false;
+				isBrakingPosXY = false;
+				brakePosXYTime = 0;
+				setpoint->mode_x = modeVelocity;
+				setpoint->mode_y = modeVelocity;
+				setpoint->vel.x = -setpoint->angle.pitch * XY_STICK_VEL_SCALE;
+				setpoint->vel.y = -setpoint->angle.roll * XY_STICK_VEL_SCALE;
+			}
+			else if (!xyHoldActive)
+			{
+				/* 状态B 刹车：速度环目标0刹停，位置环不介入；
+				 * 等速度归零(或超时)再锁存, 避免锁到滞后的位置估计被反向拉回 */
+				if (isBrakingPosXY == false)
+				{
+					isBrakingPosXY = true;
+					brakePosXYTime = 0;
+				}
+				setpoint->mode_x = modeVelocity;
+				setpoint->mode_y = modeVelocity;
+				setpoint->vel.x = 0.f;
+				setpoint->vel.y = 0.f;
+				if ((fabsf(state->velocity.x) < XY_BRAKE_VEL_DZ &&
+				     fabsf(state->velocity.y) < XY_BRAKE_VEL_DZ) ||
+				    brakePosXYTime++ > XY_BRAKE_TIMEOUT_MS)
+				{
+					/* 锁存点带速度前馈, 补偿测速滞后 */
+					holdPosX = state->position.x + state->velocity.x * XY_HOLD_LOOKAHEAD;
+					holdPosY = state->position.y + state->velocity.y * XY_HOLD_LOOKAHEAD;
+					xyHoldActive = true;
+					isBrakingPosXY = false;
+					brakePosXYTime = 0;
+					flightClearPosPID();
+					setpoint->mode_x = modeAbs;
+					setpoint->mode_y = modeAbs;
+					setpoint->pos.x = holdPosX;
+					setpoint->pos.y = holdPosY;
+				}
+			}
+			else
+			{
+				/* 状态C 保持 */
+				isBrakingPosXY = false;
+				brakePosXYTime = 0;
+				setpoint->mode_x = modeAbs;
+				setpoint->mode_y = modeAbs;
+				setpoint->pos.x = holdPosX;
+				setpoint->pos.y = holdPosY;
+				setpoint->vel.x = 0.f;
+				setpoint->vel.y = 0.f;
+			}
 		}
 	}
 	else
 	{
-		/* 高度回升（弹跳），重置最低点 */
-		landMinHeight = state->height;
-		landStallCnt = 0;
+		xyHoldActive = false;
+		isBrakingPosXY = false;
+		brakePosXYTime = 0;
+		holdPosX = state->position.x;
+		holdPosY = state->position.y;
+		setpoint->mode_x = modeDisable;
+		setpoint->mode_y = modeDisable;
 	}
 }
 
-static bool initHigh = false;
-static float holdHeight = TAKEOFF_HEIGHT;
-// static bool hasUserAdjustedAltitude; // 不再使用
-static bool isAdjustingPosXY = true;/*调整XY位置*/
-static uint8_t adjustPosXYTime = 0;		/*XY位置调整时间*/
-static float errorPosX = 0.f;		/*X位移误差*/
-static float errorPosY = 0.f;		/*Y位移误差*/
-static bool isAdjustingPosZ = false;	/*调整Z位置*/
-static float holdPosX = 0.f;
-static float holdPosY = 0.f;
-static bool xyHoldActive = false;
-static bool isBrakingPosXY = false;
-static uint16_t brakePosXYTime = 0;
-static bool isBrakingPosZ = false;
-static uint16_t brakePosZTime = 0;
-static float errorPosZ = 0.f;
-static bool takeoffActive = false;	/* 起飞爬升阶段 */
+/* ========== 主调度 ========== */
 
 /**
  * @brief 获取要到达的状态
- * 
- * @param setpoint 设定位置
- * @param state 状态
  */
 void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 {
@@ -244,7 +265,7 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 		data.angle.roll = 0.f;
 		data.angle.pitch = 0.f;
 		data.angle.yaw = 0.f;
-		data.throttle = last_data.throttle;
+		data.throttle = 50.0f;		/*中性油门，避免断线后保留旧爬升油门*/
 	}
 	else
 	{
@@ -256,7 +277,7 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 		setCommanderKeyFlight(false);
 		setCommanderKeyland(false);
 	}
-	state->isRCLocked = (isRCLocked || safetyLatched);
+	state->isRCLocked = (getIsLock() || safetyLatched);
 
 	/* 消费边沿：commander 内部状态复位（PID/position 复位在 Control_Task） */
 	if (consumeKeyFlightRising())
@@ -265,7 +286,7 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 		maxAccZ = 0.f;
 		maxAccZOverCnt = 0;
 		maxAccZWinCnt = 0;
-		initHigh = false;
+		takeoffReset();
 		xyHoldActive = false;
 	}
 	if (consumeKeyLandRising())
@@ -297,155 +318,32 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 			}
 			else if(commander.keyFlight)/* 一键起飞 */
 			{
+				static bool takeoffXYInitDone = true;
 				setpoint->thrust = 0;
 
-				if (initHigh == false)
+				bool stillTakingOff = takeoffRamp(setpoint, state, &holdHeight);
+
+				if (stillTakingOff)
 				{
-					initHigh = true;
-					takeoffActive = true;
-					isAdjustingPosXY = false;
-					errorPosX = 0.f;
-					errorPosY = 0.f;
-					holdPosX = state->position.x;
-					holdPosY = state->position.y;
-					xyHoldActive = false;
-					isBrakingPosXY = false;
-					brakePosXYTime = 0;
+					/* 首帧：锁定 XY 位置起点（后续爬升帧不覆盖） */
+					if (takeoffXYInitDone)
+					{
+						takeoffXYInitDone = false;
+						holdPosX = state->position.x;
+						holdPosY = state->position.y;
+						xyHoldActive = true;
+						isBrakingPosXY = false;
+						brakePosXYTime = 0;
+					}
 					isAdjustingPosZ = false;
 					isBrakingPosZ = false;
 					brakePosZTime = 0;
 					errorPosZ = 0.f;
-
-					holdHeight = state->height;
-					setpoint->height = holdHeight;
-					float takeoffRemain = TAKEOFF_HEIGHT - state->height;
-					float takeoffSpeed = TAKEOFF_SPEED;
-					if (takeoffRemain < TAKEOFF_SLOW_ZONE)
-					{
-						takeoffSpeed = TAKEOFF_MIN_SPEED +
-							(TAKEOFF_SPEED - TAKEOFF_MIN_SPEED) * (takeoffRemain / TAKEOFF_SLOW_ZONE);
-						takeoffSpeed = fmaxf(TAKEOFF_MIN_SPEED, fminf(TAKEOFF_SPEED, takeoffSpeed));
-					}
-					setpoint->vel.z = takeoffSpeed;
-					setpoint->mode_z = modeVelocity;
-				}
-
-				if (takeoffActive)
-				{
-					/* 速度模式爬升至目标高度 */
-					if (state->height >= TAKEOFF_HEIGHT)
-					{
-						takeoffActive = false;
-						isAdjustingPosZ = false;
-						isBrakingPosZ = false;
-						brakePosZTime = 0;
-						holdHeight = TAKEOFF_HEIGHT;
-						setpoint->height = holdHeight;
-						setpoint->vel.z = 0;
-						setpoint->mode_z = modeAbs;
-					}
-					else
-					{
-						/* 爬升中：速度模式, 跟踪当前高度 */
-						float takeoffRemain = TAKEOFF_HEIGHT - state->height;
-						float takeoffSpeed = TAKEOFF_SPEED;
-						if (takeoffRemain < TAKEOFF_SLOW_ZONE)
-						{
-							takeoffSpeed = TAKEOFF_MIN_SPEED +
-								(TAKEOFF_SPEED - TAKEOFF_MIN_SPEED) * (takeoffRemain / TAKEOFF_SLOW_ZONE);
-							takeoffSpeed = fmaxf(TAKEOFF_MIN_SPEED, fminf(TAKEOFF_SPEED, takeoffSpeed));
-						}
-						setpoint->vel.z = takeoffSpeed;
-						holdHeight = state->height;
-						setpoint->height = holdHeight;
-						setpoint->mode_z = modeVelocity;
-					}
 				}
 				else
 				{
-					/* 起飞完成后的正常飞行: 摇杆控制高度 */
-					float climbRaw = (data.throttle - 50.f) / 50.f;
-					if (fabsf(climbRaw) < THR_DZ) climbRaw = 0;
-
-					float climb;
-					if (climbRaw > 0.f)
-						climb = climbRaw * PILOT_SPEED_UP;
-					else
-						climb = climbRaw * PILOT_SPEED_DN;
-
-					if (fabsf(climb) > 5.f)
-					{
-						/* 有杆输入：直接设置目标速度 */
-						isAdjustingPosZ = true;
-						isBrakingPosZ = false;
-						brakePosZTime = 0;
-						setpoint->mode_z = modeVelocity;
-						setpoint->vel.z = climb;
-						setpoint->height = holdHeight;
-
-						/* 失控保护：油门拉下降 + 下降加速度超阈值持续 ~0.8s 触发
-						 * 改为持续判断避免单帧抖动误触；触发后切一键降落走 5s 斜坡 */
-						if (climbRaw < -0.2f)
-						{
-							if (state->acc.z > maxAccZ)
-								maxAccZ = state->acc.z;
-
-							if (maxAccZ > 250.f)
-							{
-								if (++maxAccZOverCnt > 200)
-								{
-									LOG_WARN("失控保护触发: maxAccZ=%.1f cm/s^2, climbRaw=%.2f, 切一键降落",
-										maxAccZ, climbRaw);
-									Alarm_SetMode(ALARM_MODE_ERROR);
-									setCommanderKeyFlight(false);
-									setCommanderKeyland(true);   /* 走 5s 降落斜坡，不硬停 */
-								}
-							}
-							else
-							{
-								maxAccZOverCnt = 0;
-							}
-						}
-					}
-					else if (isAdjustingPosZ == true)
-					{
-						/* 松杆回中：速度环刹车 → 切位置环锁高 */
-						if (isBrakingPosZ == false)
-						{
-							isBrakingPosZ = true;
-							brakePosZTime = 0;
-						}
-
-						setpoint->mode_z = modeVelocity;
-						setpoint->vel.z = 0;
-
-						if (fabsf(state->velocity.z) < Z_BRAKE_VEL_DZ || brakePosZTime++ > Z_BRAKE_TIMEOUT_MS)
-						{
-							isAdjustingPosZ = false;
-							isBrakingPosZ = false;
-							brakePosZTime = 0;
-							holdHeight = state->height + errorPosZ;
-							setpoint->mode_z = modeAbs;
-						}
-						setpoint->height = holdHeight;
-					}
-					else
-					{
-						setpoint->mode_z = modeAbs;
-						setpoint->vel.z = 0;
-						errorPosZ = holdHeight - state->height;
-						errorPosZ = fmaxf(-10.0f, fminf(10.0f, errorPosZ));
-						setpoint->height = holdHeight;
-					}
-
-					/* 跟踪窗口每 ~3.2s 重置一次 (250Hz*800=200000)，
-					 * 避免 maxAccZ 长时间累积导致后续小波动也被误触（独立顶层） */
-					if (++maxAccZWinCnt > 800)
-					{
-						maxAccZWinCnt = 0;
-						maxAccZ = 0.f;
-						maxAccZOverCnt = 0;
-					}
+					takeoffXYInitDone = true;
+					setpointNormalFlight(&data, setpoint, state);
 				}
 			}
 			else/* 着陆状态 */
@@ -453,14 +351,12 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 				setpoint->thrust = 0;
 				setpoint->vel.z = 0;
 				setpoint->mode_z = modeDisable;
-				initHigh = false;
-				takeoffActive = false;
+				takeoffReset();
 				isAdjustingPosZ = false;
 				isBrakingPosZ = false;
 				brakePosZTime = 0;
 				errorPosZ = 0.f;
 				xyHoldActive = false;
-				isAdjustingPosXY = true;
 				isBrakingPosXY = false;
 				brakePosXYTime = 0;
 				holdPosX = state->position.x;
@@ -498,84 +394,14 @@ void commanderGetSetpoint(setpoint_t *setpoint, state_t *state)
 	setpoint->angle.yaw = data.angle.yaw;
 
 	/* RC 失联或自动降落时 yaw 杆量清零 (MiniFly 方式: 约 500ms 后清零 yaw) */
-	if (isRCLocked || (commander.keyLand && !commander.keyFlight))
+	if (getIsLock() || (commander.keyLand && !commander.keyFlight))
 	{
 		setpoint->angle.yaw = 0.0f;
 	}
 
 	// LOG_DEBUG("pitch=%.2f,roll=%.2f,yaw=%.2f",setpoint->angle.pitch,setpoint->angle.roll,setpoint->angle.yaw);
 
-		if(commander.ctrlMode == MODE_THREEHOLD && commander.attitudeMode == MODE_AIRPLANE)	/* 光流定点模式 */
-		{
-			if (!position_IsXYFlowValid())	/* 光流失效：退出XY环，回退纯姿态+定高 */
-			{
-				position_ResetFlowState();
-				xyHoldActive = false;
-				isAdjustingPosXY = true;
-				isBrakingPosXY = false;
-				brakePosXYTime = 0;
-				setpoint->mode_x = modeDisable;
-				setpoint->mode_y = modeDisable;
-				setpoint->vel.x = 0.f;
-				setpoint->vel.y = 0.f;
-			}
-			else
-			{
-			setpoint->angle.yaw *= 0.5f;	/* 定点模式 yaw 减半 (MiniFly 方式) */
-
-			/* 摇杆控制速度，回中锁定当前位置 */
-			bool stickActive = (fabsf(setpoint->angle.roll) > 1.5f || fabsf(setpoint->angle.pitch) > 1.5f);
-			if (stickActive)
-			{
-				/* 摇杆激活：退出位置保持，切速度模式 */
-				xyHoldActive = false;
-				isAdjustingPosXY = false;
-				isBrakingPosXY = false;
-				brakePosXYTime = 0;
-				setpoint->mode_x = modeVelocity;
-				setpoint->mode_y = modeVelocity;
-				setpoint->vel.x = -setpoint->angle.pitch * XY_STICK_VEL_SCALE;
-				setpoint->vel.y = -setpoint->angle.roll * XY_STICK_VEL_SCALE;
-			}
-			else
-			{
-				/* 摇杆回中：锁当前位置，切位置保持 */
-				if (!xyHoldActive)
-				{
-					holdPosX = state->position.x;
-					holdPosY = state->position.y;
-					xyHoldActive = true;
-				}
-				isAdjustingPosXY = false;
-				isBrakingPosXY = false;
-				brakePosXYTime = 0;
-				setpoint->mode_x = modeAbs;
-				setpoint->mode_y = modeAbs;
-				setpoint->pos.x = holdPosX;
-				setpoint->pos.y = holdPosY;
-				setpoint->vel.x = 0.f;
-				setpoint->vel.y = 0.f;
-			}
-			}
-		}
-		else	/* 非定点模式，关闭XY位置环 */
-		{
-			xyHoldActive = false;
-			isAdjustingPosXY = true;
-			isBrakingPosXY = false;
-			brakePosXYTime = 0;
-			holdPosX = state->position.x;
-			holdPosY = state->position.y;
-			setpoint->mode_x = modeDisable;
-			setpoint->mode_y = modeDisable;
-		}
-
-
-}
-
-uint8_t getIsLock(void)
-{
-	return isRCLocked;
+		setpointXY(&data, setpoint, state);
 }
 
 /**
@@ -738,7 +564,6 @@ void setCommanderSafetyLatched(bool set)
 	safetyLatched = set;
 	if (safetyLatched)
 	{
-		isRCLocked = true;
 		commander.keyFlight = false;
 		commander.keyLand = false;
 	}

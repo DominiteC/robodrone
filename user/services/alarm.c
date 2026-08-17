@@ -11,14 +11,18 @@
 #include "task.h"
 #include "wireless.h"
 
-AlarmMode current_mode = ALARM_MODE_LOCKED;
-float battery_voltage = 22.2; // 初始电池电压
-float battery_current = 0.0;    // 初始电池电流
-uint8_t alarm_flag = 0;
-static TickType_t error_mode_start_tick = 0;
-static bool error_buzzer_muted = false;
+//-------------------------警报系统全局变量-----------------------------------
+AlarmMode current_mode = ALARM_MODE_LOCKED;  /* 当前警报模式 (锁定/解锁/低电量/错误) */
+float battery_voltage = 22.2;                /* 当前电池电压 (V), 初始默认值 */
+float battery_current = 0.0;                 /* 当前电池电流 (A) */
+uint8_t alarm_flag = 0;                      /* 警报 LED/蜂鸣器状态切换标志 */
+static TickType_t error_mode_start_tick = 0;  /* 错误模式开始时间 (用于 3s 后静音蜂鸣器) */
+static bool error_buzzer_muted = false;       /* 错误蜂鸣器是否已静音 */
+//-------------------------警报系统全局变量-----------------------------------
 
-uint16_t adc_value[2];
+//-------------------------ADC 采样缓冲区-----------------------------------
+uint16_t adc_value[2];                       /* ADC 采样值 [0]=电压, [1]=电流 */
+//-------------------------ADC 采样缓冲区-----------------------------------
 
 /**
  * @brief 警报初始化

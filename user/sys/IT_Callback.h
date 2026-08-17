@@ -22,7 +22,9 @@ typedef struct Subject {
   //新增 2024/1/7
   uint32_t period;//通知的周期，用于与定时器的值作对比，单位：与定时器的分频设置相关
 } Subject;
-extern Subject gl_TIM6_IT;//定时器中断主题,可以在其他地方订阅他的消息
+//-------------------------IT_Callback.h 中的 extern------------------------------
+extern Subject gl_TIM6_IT;  /* TIM6 定时器中断主题, 可在其他地方订阅其消息 */
+//-------------------------IT_Callback.h 中的 extern------------------------------
 void TIM6_pollCall(uint32_t gl_time);
 
 #endif  // !IT_CALLBACK_H

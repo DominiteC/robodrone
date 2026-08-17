@@ -48,11 +48,13 @@ struct SQ
 };
 
 
-extern struct SAcc 		stcAcc;
-extern struct SGyro 	stcGyro;
-extern struct SAngle 	stcAngle;
-extern struct SMag 		stcMag;
-extern struct SQ		stcQ;
+//-------------------------JY901P 传感器数据 (全局可见)-----------------------------------
+extern struct SAcc 		stcAcc;     /* 加速度计数据 (传感器坐标系) */
+extern struct SGyro 	stcGyro;    /* 陀螺仪角速度 (传感器坐标系) */
+extern struct SAngle 	stcAngle;   /* 欧拉角融合结果 (传感器坐标系) */
+extern struct SMag 		stcMag;     /* 磁力计数据 */
+extern struct SQ		stcQ;       /* 四元数姿态数据 */
+//-------------------------JY901P 传感器数据 (全局可见)-----------------------------------
 
 int32_t WitSerialWriteRegister(SerialWrite Write_func);
 int32_t WitWriteReg(uint32_t uiReg, uint16_t usData);

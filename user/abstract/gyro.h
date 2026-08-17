@@ -22,8 +22,10 @@ void gyro_calibrateGyroZOffset(void);
 /* 校准是否通过: 0=未通过 (offset=0, yaw 会缓慢漂), 1=已通过 */
 uint8_t gyro_isGyroZCalibrated(void);
 /* 校准结果调试变量 (地面站遥测用, 避免 LOG_INFO 关中断导致 IWDG 复位) */
-extern float  gyro_cali_offset;
-extern float  gyro_cali_var_z;
-extern uint8_t gyro_cali_status;  /* 0=未完成, 1=通过, 2=失败 */
+//-------------------------陀螺零偏调试变量-----------------------------------
+extern float  gyro_cali_offset;             /* 校准后的 Z 轴零偏值 (地面站遥测) */
+extern float  gyro_cali_var_z;              /* Z 轴采样方差 (地面站遥测) */
+extern uint8_t gyro_cali_status;            /* 校准结果: 0=未完成, 1=通过, 2=失败 */
+//-------------------------陀螺零偏调试变量-----------------------------------
 
 #endif  // !__GYRO_H_

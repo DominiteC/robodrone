@@ -99,7 +99,9 @@ typedef struct {
     uint8_t  last_tof_status;
 } MtfDiagnostics;
 
-extern MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;
+//-------------------------MTF-01 传感器数据 (全局可见)-----------------------------------
+extern MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;  /* MTF-01 最新传感器数据 (距离/光流/状态) */
+//-------------------------MTF-01 传感器数据 (全局可见)-----------------------------------
 
 void mtf_01_init(void);
 bool micolink_rx_ok(void);

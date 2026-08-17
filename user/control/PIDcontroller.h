@@ -58,6 +58,7 @@ typedef struct
     float Intergral_Separate; // 积分分离值
     float DeltaT_Limit_Max;     // 时间间隔限幅
     float DeltaT_Limit_Min;     // 时间间隔限幅
+    float NominalDt;            // 固定控制周期(s)，正常时使用此值避免HAL_GetTick量化误差
 
     //-----------------------------------
     // for calculating
@@ -80,6 +81,8 @@ typedef struct
 
     uint32_t lastTime;
     float dt;
+    uint8_t initialized;   // P0: 首次计算标志，Reset后第一拍不输出D项
+    uint8_t dt_timeout;    // P2: 超期标志，跳过D项避免错误微分
 
 } PIDInstance;
 
@@ -104,6 +107,7 @@ typedef struct // config parameter
     float Intergral_Separate; // 积分分离值
     float DeltaT_Limit_Max;     // 时间间隔限幅
     float DeltaT_Limit_Min;     // 时间间隔限幅
+    float NominalDt;            // 固定控制周期(s)，如500Hz环=0.002f
 } PID_Init_Config_s;
 
 /**
@@ -144,6 +148,8 @@ float PIDCalculate(PIDInstance *pid, float measure, float ref);
  * @brief 清零 PID 所有输出变量
  */
 void PID_ClearIntegral(PIDInstance *pid);
+
+void PID_PrepareReengage(PIDInstance *pid); // P1: 旁路PID重新启用前状态同步
 
 void PID_Reset(PIDInstance *pid);
 

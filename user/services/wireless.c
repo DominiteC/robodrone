@@ -19,10 +19,11 @@
 #include "task.h"
 #include "semphr.h"
 
-Wireless_ReceiveCallback wireless_callback = NULL;
-
-QueueHandle_t wireless_semaph;
-static uint8_t wireless_rx_idle_streak = 0;
+//-------------------------无线通信全局变量-----------------------------------
+Wireless_ReceiveCallback wireless_callback = NULL;  /* 数据接收回调函数指针 */
+QueueHandle_t wireless_semaph;                     /* 接收中断信号量 (ISR→任务同步) */
+static uint8_t wireless_rx_idle_streak = 0;         /* 接收空闲连续计数 (超时后触发链路恢复) */
+//-------------------------无线通信全局变量-----------------------------------
 #define WIRELESS_RX_IDLE_RECOVER 20   /* 20 × 50ms = 1s 无接收 → 链路恢复 */
 
 /* ──── 内部函数 ──── */

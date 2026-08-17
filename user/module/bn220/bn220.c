@@ -4,8 +4,10 @@
 #include "C_code_Log.h"
 #include <string.h>
 
-USART_Data bn220_handle;
-uint8_t bn220_buf[200];
+//-------------------------BN220 GPS 串口数据-----------------------------------
+USART_Data bn220_handle;       /* BN220 GPS 串口数据接收句柄 (DMA 模式) */
+uint8_t bn220_buf[200];        /* BN220 GPS 原始数据缓冲区 (NMEA 句子) */
+//-------------------------BN220 GPS 串口数据-----------------------------------
 void BN220_Decode(void* this);
 
 /**

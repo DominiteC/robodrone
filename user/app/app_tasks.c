@@ -97,14 +97,14 @@ static void stkMonTask(void* param)
     TickType_t lastWake = xTaskGetTickCount();
     vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(3000));  /* 等业务任务跑起来 */
     while(1) {
-        LOG_WARN("STK A:%u U:%s N:%u S:%u R:%u C:%u M:%u",
-            hAlarm   ? uxTaskGetStackHighWaterMark(hAlarm)  : 0,
-            hUsmart  ? "on " : "off",
-            hANO     ? uxTaskGetStackHighWaterMark(hANO)    : 0,
-            hSend    ? uxTaskGetStackHighWaterMark(hSend)   : 0,
-            hRecv    ? uxTaskGetStackHighWaterMark(hRecv)   : 0,
-            hControl ? uxTaskGetStackHighWaterMark(hControl): 0,
-            hMtf     ? uxTaskGetStackHighWaterMark(hMtf)    : 0);
+        // LOG_WARN("STK A:%u U:%s N:%u S:%u R:%u C:%u M:%u",
+        //     hAlarm   ? uxTaskGetStackHighWaterMark(hAlarm)  : 0,
+        //     hUsmart  ? "on " : "off",
+        //     hANO     ? uxTaskGetStackHighWaterMark(hANO)    : 0,
+        //     hSend    ? uxTaskGetStackHighWaterMark(hSend)   : 0,
+        //     hRecv    ? uxTaskGetStackHighWaterMark(hRecv)   : 0,
+        //     hControl ? uxTaskGetStackHighWaterMark(hControl): 0,
+        //     hMtf     ? uxTaskGetStackHighWaterMark(hMtf)    : 0);
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));
     }
 }

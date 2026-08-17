@@ -2,13 +2,17 @@
 #include <string.h>
 #include "stm32f4xx_hal.h"
 
-static SerialWrite p_WitSerialWriteFunc = NULL;
+//-------------------------JY901P 串口写函数指针-----------------------------------
+static SerialWrite p_WitSerialWriteFunc = NULL;  /* JY901P 串口写函数指针 (由上层注册) */
+//-------------------------JY901P 串口写函数指针-----------------------------------
 
-struct SAcc 	stcAcc={0};
-struct SGyro 	stcGyro={0};
-struct SAngle 	stcAngle={0};
-struct SMag 	stcMag={0};
-struct SQ		stcQ={0};
+//-------------------------JY901P 传感器数据结构体-----------------------------------
+struct SAcc 	stcAcc={0};    /* 加速度计数据 (传感器坐标系原始值) */
+struct SGyro 	stcGyro={0};   /* 陀螺仪角速度数据 (传感器坐标系原始值) */
+struct SAngle 	stcAngle={0};  /* 欧拉角融合结果 (传感器坐标系原始值) */
+struct SMag 	stcMag={0};    /* 磁力计数据 */
+struct SQ		stcQ={0};      /* 四元数姿态数据 */
+//-------------------------JY901P 传感器数据结构体-----------------------------------
 
 #define p_WitDelaymsFunc HAL_Delay
 

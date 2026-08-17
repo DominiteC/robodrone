@@ -4,8 +4,10 @@
 #include "task.h"
 #include "stm32f4xx.h"
 
-static volatile uint32_t control_heartbeat_tick = 0;
-static volatile bool     wd_inited             = false;
+//-------------------------看门狗守护状态-----------------------------------
+static volatile uint32_t control_heartbeat_tick = 0;  /* 控制任务心跳时间戳 (ms), 喂狗参考 */
+static volatile bool     wd_inited             = false; /* 看门狗是否已完成初始化 */
+//-------------------------看门狗守护状态-----------------------------------
 
 bool WatchdogGuard_WasIwdgReset(void)
 {

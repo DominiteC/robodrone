@@ -93,8 +93,10 @@ void removeObserver(Subject *this, Observer *observer) {
     target = target->next;
   }
 }
+//-------------------------TIM6 定时器中断主题-----------------------------------
 Subject gl_TIM6_IT = {
-    .notify = notify, .add = addObserver, .remove = removeObserver,.period=20};  // 定时器中断主题
+    .notify = notify, .add = addObserver, .remove = removeObserver,.period=20};  /* TIM6 1ms 定时器中断主题, 可在其他地方订阅其消息 */
+//-------------------------TIM6 定时器中断主题-----------------------------------
 
 /// @brief 在轮询中使用tim6作为时钟来源，实现观察者模式
 void TIM6_pollCall(uint32_t gl_time)

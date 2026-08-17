@@ -54,7 +54,9 @@ typedef struct{
     int16_t  dig_P9;
 }sDrv_BMP280_t;
 
-extern sDrv_BMP280_t bmp280;
+//-------------------------BMP280 驱动实例 (全局可见)-----------------------------------
+extern sDrv_BMP280_t bmp280;        /* BMP280 驱动实例 (含温度/气压/高度数据) */
+//-------------------------BMP280 驱动实例 (全局可见)-----------------------------------
 
 uint8_t BMP280_ReadChipID_SoftSPI(void);
 

@@ -27,12 +27,15 @@
 #include "task.h"
 #include "semphr.h"
 
-uint8_t RC_ID = 255;
-uint8_t RemoteFlag = 0;
-CtrlData RC_Control;
+//-------------------------遥控数据全局变量-----------------------------------
+uint8_t RC_ID = 255;                     /* 遥控器 ID (未收到遥测前默认 255) */
+uint8_t RemoteFlag = 0;                  /* 遥控数据已接收标志 (1=有新数据) */
+CtrlData RC_Control;                     /* 遥控器控制数据 (角度/油门/模式) */
+//-------------------------遥控数据全局变量-----------------------------------
 
-uint8_t battery_switch_flag = 0;
-static TickType_t s_last_atti_cmd_tick = 0;
+uint8_t battery_switch_flag = 0;         /* 电池开关切换请求标志 (由命令置位, 任务消费) */
+static TickType_t s_last_atti_cmd_tick = 0;  /* 上次收到姿态切换命令的系统 Tick (防抖) */
+//-------------------------遥控数据全局变量-----------------------------------
 
 void ButtonCommand(CmdData *cmd);
 void RemoteData_RecieveHandler(uint8_t data[], uint8_t len);
@@ -254,9 +257,17 @@ void ButtonCommand(CmdData *cmd)
         }
         else
         {
+#if LAND_SLOW_ENABLE
+            /* 正常缓降 */
             setCommanderKeyland(true);
             setCommanderKeyFlight(false);
             LOG_INFO_IT("设置为降落形态");
+#else
+            /* 直接停机: PWM 立即输出 0, 不走缓降流程 */
+            setCommanderKeyFlight(false);
+            setCommanderKeyland(false);
+            LOG_INFO_IT("设置为降落形态（直接停机）");
+#endif
         }
     }
     else if (cmd->cmd == CMD_BATTERY_SWITCH)

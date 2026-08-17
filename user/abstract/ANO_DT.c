@@ -39,15 +39,19 @@ extern USART_SendType channel_0;
 #define BYTE2(dwTemp)       ( *( (char *)(&dwTemp) + 2) )
 #define BYTE3(dwTemp)       ( *( (char *)(&dwTemp) + 3) )
 
-static volatile TickType_t s_ano_last_rx_tick = 0;
+//-------------------------ANO 协议接收时间戳-----------------------------------
+static volatile TickType_t s_ano_last_rx_tick = 0;  /* 上次收到有效 ANO 帧的系统 Tick (ISR 中更新) */
+//-------------------------ANO 协议接收时间戳-----------------------------------
 
 static void ANO_UpdateSendHealth(Usart_SendState send_state)
 {
     (void)send_state;
 }
 
-dt_flag_t f;					//需要发送数据的标志
-uint8_t data_to_send[80];	//发送数据缓存（扩大以支持高频振动数据帧）
+//-------------------------ANO 协议数据缓存与发送标志-----------------------------------
+dt_flag_t f;					/* 地面站数据发送标志位 (各数据帧类型独立控制) */
+uint8_t data_to_send[80];	/* ANO 协议发送缓冲区 (最大 80 字节, 含帧头/校验) */
+//-------------------------ANO 协议数据缓存与发送标志-----------------------------------
 
 
 void ANO_DT_CallBack(void* this)
@@ -172,18 +176,18 @@ void ANO_DT_Data_Exchange(void *param)
 			PIDDump dump_yaw_angle;
 			pid_dump(&pid_yaw_angle, &dump_yaw_angle);
 ANO_DT_Send_RCDataFloat(
-												debug_target_angle_yaw,        // 1-目标 yaw
-												state.angle.yaw,        // 2-实际 yaw
-                        pid_yaw_rate.Output,      // 3-yaw rate PID输出
-												pid_z_velocity.Ref,    // 4-目标Z速度 cm/s
-                        state.velocity.z,         // 5-实际Z速度 cm/s
-												pid_z_velocity.Output, // 6-Z速度环PID输出
-                        debug_target_angle_roll,      // 7-target roll angle
-                        state.velocity.x,           // 8-X velocity cm/s
-                        state.velocity.y,           // 9-Y velocity cm/s
-                        state.gyro.z,              // 10-yaw 角度误差
-                        pid_yaw_angle.Output, // 11-yaw 角度环PID输出
-												debug_yaw_rate_target   // 12-yaw 角速度目标
+												pid_x_velocity.Ref,          // 9-X 目标速度 (cm/s)
+												state.velocity.x,            // 11-X 实际速度 (cm/s)	
+												pid_y_velocity.Ref,          // 10-Y 目标速度 (cm/s)
+												state.velocity.y,             // 12-Y 实际速度 (cm/s)
+												state.position.x,            // 5-X 实际位置 (cm)
+												state.position.y,            // 6-Y 实际位置 (cm)
+												target.pos.x,                // 7-X 目标位置 (cm)
+												target.pos.y,                // 8-Y 目标位置 (cm)
+												debug_target_angle_yaw,      // 9-Yaw 目标角度 (deg)
+												state.angle.yaw,             // 10-Yaw 实际角度 (deg)
+												debug_yaw_rate_target,       // 11-Yaw 目标角速度 (deg/s)
+												state.gyro.z                  // 12-Z 加速度 (m/s²)
                         );
 		}	
 /////////////////////////////////////////////////////////////////////////////////////	
@@ -1043,7 +1047,7 @@ void ANO_DT_Send_PID_Debug(uint8_t frame_type,
 	ANO_DT_Send_Data(data_to_send, _cnt);
 }
 
-void ANO_DT_Send_RCDataFloat(float yaw, float roll, float pitch, float x_velocity_output, float y_velocity_output, float target_height, float velocity_x, float velocity_y, float velocity_z, float target_vel_x, float target_vel_y, float acc_z)
+void ANO_DT_Send_RCDataFloat(float roll_rate_target, float roll_rate_meas, float roll_angle_target, float roll_angle_meas, float pitch_rate_target, float pitch_rate_meas, float pitch_angle_target, float pitch_angle_meas, float yaw_angle_target, float yaw_angle_meas, float yaw_rate_target, float yaw_rate_meas)
 {
     uint8_t _cnt = 0, sum = 0, i;
     float _temp;
@@ -1053,40 +1057,40 @@ void ANO_DT_Send_RCDataFloat(float yaw, float roll, float pitch, float x_velocit
     data_to_send[_cnt++] = 0xF4;  // 自定义帧类型
     data_to_send[_cnt++] = 0;     // 长度占位
 
-    _temp = yaw;
+    _temp = roll_rate_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = roll;
+    _temp = roll_rate_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = pitch;
+    _temp = roll_angle_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = x_velocity_output;
+    _temp = roll_angle_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = y_velocity_output;
+    _temp = pitch_rate_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = target_height;
+    _temp = pitch_rate_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = velocity_x;
+    _temp = pitch_angle_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = velocity_y;
+    _temp = pitch_angle_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = velocity_z;
+    _temp = yaw_angle_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = target_vel_x;
+    _temp = yaw_angle_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = target_vel_y;
+    _temp = yaw_rate_target;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
-    _temp = acc_z;
+    _temp = yaw_rate_meas;
     data_to_send[_cnt++] = BYTE3(_temp); data_to_send[_cnt++] = BYTE2(_temp); data_to_send[_cnt++] = BYTE1(_temp); data_to_send[_cnt++] = BYTE0(_temp);
 
     data_to_send[3] = _cnt - 4;

@@ -10,7 +10,9 @@
 
 void safeCheck(MotorCtrl* ctrl, state_t* state)
 {
-    static bool safety_triggered = false;
+//-------------------------安全检测状态-----------------------------------
+    static bool safety_triggered = false;  /* 安全保护是否已触发 (防重复触发) */
+//-------------------------安全检测状态-----------------------------------
 
     if (!isfinite(state->angle.roll) || !isfinite(state->angle.pitch) ||
         !isfinite(state->gyro.x) || !isfinite(state->gyro.y) || !isfinite(state->gyro.z) ||

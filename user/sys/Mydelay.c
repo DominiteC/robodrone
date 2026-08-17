@@ -16,7 +16,9 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 
-QueueHandle_t mydelay_mutex;
+//-------------------------Mydelay 互斥锁-----------------------------------
+QueueHandle_t mydelay_mutex;  /* mydelay 延时功能互斥锁 (保护延时链表) */
+//-------------------------Mydelay 互斥锁-----------------------------------
 
 void Mydelay_Init(void)
 {
@@ -29,7 +31,9 @@ struct MyDelayTypeDef{
     uint32_t targetTime;
     struct MyDelayTypeDef *next;
 };
-static struct MyDelayTypeDef *head = NULL;
+//-------------------------Mydelay 延时链表头-----------------------------------
+static struct MyDelayTypeDef *head = NULL;  /* mydelay 延时链表头指针 (按到期时间排序) */
+//-------------------------Mydelay 延时链表头-----------------------------------
 /**
  * @brief 根据id寻找节点
  * 

@@ -84,6 +84,18 @@ main.c
 
 ## 架构变更记录
 
+### 2026-08-13：一键降落优化（降落地板分段 + 速度环强化 + 触底判定 + 拨杆触底停飞）
+
+- 修复一键降落"近地面难下降"和"降太快触底反弹"两个症状。
+- `control.c`：删除 `LAND_END_THRUST`/`LAND_RAMP_CYCLE`，降落改为按高度分段地板（`LAND_HIGH_FLOOR=20`、`LAND_IDLE_THRUST=15`、`LAND_FLOOR_SLEW`），下降速度交回 z 速度环主导。
+- `control_pid.c`：`pid_z_velocity.Ki` 0.010→0.05。
+- `commander.h`：`LAND_SPEED` 15→20、`LAND_MIN_SPEED` 4→8；新增 `IMPACT_ACC_THRESHOLD`、`LAND_MIN_HEIGHT`。
+- `commander_takeoff_land.c`：`flyerAutoLand` 新增触底即时判定（加速度尖峰 / 高度达支撑架着地高度 → 立即锁停）。
+- `commander.c`：`setpointNormalFlight` 下降触底（高度≤12 或撞击尖峰）→ 切一键降落触底停飞。
+- `position.c`：`POSITION_Z_UPDATE_MS` 300→100。
+- `gyro.c`：`gyro_calibrateGyroZOffset` 增加 Z 轴重力偏置采样，修复 `state->acc.z` 未扣重力（悬停≈9.8 → ≈0）。
+- 改变运行逻辑：降落油门下限、下降速度、触地判定方式均变化，需试飞标定阈值。详见 `docs/一键降落优化设计.md`。
+
 ### 2026-06-29：建立 app 启动分层
 
 - 新增 `user/app`，将启动编排迁移到 app 层。

@@ -10,14 +10,18 @@
 #include "task.h"
 #include "queue.h"
 
-USART_Data mtf_01_handle;
-MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;	// 光流解析到的数据（保留兼容旧代码）
+//-------------------------MTF-01 超声波/光流数据-----------------------------------
+USART_Data mtf_01_handle;                           /* MTF-01 串口数据接收句柄 */
+MICOLINK_PAYLOAD_RANGE_SENSOR_t payload;             /* MTF-01 最新传感器数据帧 (距离/光流/质量) */
+//-------------------------MTF-01 超声波/光流数据-----------------------------------
 
-/* ---- ping-pong 缓冲 ---- */
-static uint8_t s_pp_buf[MTF_PINGPONG_BUF_COUNT][MTF_PINGPONG_BUF_SIZE];
+//-------------------------MTF-01 乒乓缓冲区-----------------------------------
+static uint8_t s_pp_buf[MTF_PINGPONG_BUF_COUNT][MTF_PINGPONG_BUF_SIZE];  /* DMA 双缓冲接收区 */
+//-------------------------MTF-01 乒乓缓冲区-----------------------------------
 
-/* ---- 原始块队列 ---- */
-static QueueHandle_t s_raw_queue;
+//-------------------------MTF-01 原始数据队列-----------------------------------
+static QueueHandle_t s_raw_queue;                     /* 原始数据帧队列 (ISR→任务解帧) */
+//-------------------------MTF-01 原始数据队列-----------------------------------
 
 void mtf_01_callback(void* this);
 
@@ -95,18 +99,18 @@ void mtf_01_task(void *argument)
 		uint32_t now = getGlobalTime();
 		if (now - last_log_ms >= 1000u) {
 			last_log_ms = now;
-			MtfDiagnostics d;
-			mtf_01_get_diagnostics(&d);
-			LOG_INFO("MTF h:%d ok:%lu q:%u age:%lu vx:%d vy:%d ax:%d ay:%d az:%d",
-			         (int)d.health,
-			         (unsigned long)d.parse_ok_count,
-			         (unsigned)d.last_flow_quality,
-			         (unsigned long)(now - d.last_frame_ms),
-			         (int)velocity.x,
-			         (int)velocity.y,
-			         (int)(stcAcc.a[0] * 100.f),
-			         (int)(stcAcc.a[1] * 100.f),
-			         (int)(stcAcc.a[2] * 100.f));
+			// MtfDiagnostics d;
+			// mtf_01_get_diagnostics(&d);
+			// LOG_INFO("MTF h:%d ok:%lu q:%u age:%lu vx:%d vy:%d ax:%d ay:%d az:%d",
+			//          (int)d.health,
+			//          (unsigned long)d.parse_ok_count,
+			//          (unsigned)d.last_flow_quality,
+			//          (unsigned long)(now - d.last_frame_ms),
+			//          (int)velocity.x,
+			//          (int)velocity.y,
+			//          (int)(stcAcc.a[0] * 100.f),
+			//          (int)(stcAcc.a[1] * 100.f),
+			//          (int)(stcAcc.a[2] * 100.f));
 		}
 	}
 }

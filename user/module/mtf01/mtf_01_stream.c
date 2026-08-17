@@ -17,7 +17,9 @@ typedef struct {
     MtfDiagnostics diag;
 } MtfStream;
 
-static MtfStream g_stream;
+//-------------------------MTF-01 流解析状态-----------------------------------
+static MtfStream g_stream;  /* MTF-01 数据流解析引擎状态 (协议状态机/缓冲区/回调) */
+//-------------------------MTF-01 流解析状态-----------------------------------
 
 /* ---- 辅助函数 ---- */
 

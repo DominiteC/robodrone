@@ -29,8 +29,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-USART_Data usartDebug;
-uint8_t USART_buf[200];
+//-------------------------调试串口数据-----------------------------------
+USART_Data usartDebug;    /* 调试串口 (USART1) 数据接收句柄 */
+uint8_t USART_buf[200];   /* 调试串口原始数据缓冲区 */
+//-------------------------调试串口数据-----------------------------------
 
 static void App_InitGlobalServices(void);
 static void App_InitDevices(void);
@@ -88,7 +90,6 @@ static void App_InitGlobalServices(void)
 static void App_InitDevices(void)
 {
 	Alarm_Init();       // 报警处理初始化
-//	ESC_Calibrate();  // 电调校准，新电调刚开始必须要校准，使用时请取消注释。:请在固定好的情况下使用，不可在无固定下使用校准
   ESC_Init();       // 电调初始化: 输出最小油门PWM, 防止磁校准期间电调滴答
   // 传感器初始化
   BN220_Init();       // GPS初始化
