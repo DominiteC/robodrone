@@ -96,3 +96,7 @@ MDK-ARM/RTE/
 
 # Tool archives bundled in third-party sources
 user/tool/TraceRecorderSource/streamports/ARM_ITM/Trace32-cmm-scripts.zip
+
+# Personal learning notes and design drafts (kept locally only)
+docs/learning/
+docs/superpowers/
