@@ -80,3 +80,19 @@ MDK-ARM/JLinkSettings.ini
 Middlewares/ST/ARM/DSP/Lib/
 
 !arm_cortexM4l_math.lib
+
+# Keil user options (machine-specific: window layout, breakpoints, paths)
+*.uvoptx
+
+# Keil auto-generated software component files
+*.scvd
+MDK-ARM/RTE/
+
+# eIDE machine-specific environment (contains absolute paths)
+**/.eide/env.ini
+
+# VSCode personal workspace file
+*.code-workspace
+
+# Tool archives bundled in third-party sources
+user/tool/TraceRecorderSource/streamports/ARM_ITM/Trace32-cmm-scripts.zip
